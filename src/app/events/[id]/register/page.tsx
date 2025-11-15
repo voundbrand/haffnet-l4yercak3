@@ -1,0 +1,1113 @@
+'use client';
+
+import { use, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { eventApi, workflowApi, type Product, type Event } from '@/lib/api-client';
+
+interface RegisterPageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+export default function RegisterPage({ params }: RegisterPageProps) {
+  const { id } = use(params);
+  const router = useRouter();
+  const [event, setEvent] = useState<Event | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(true); // Default to guest checkout
+
+  // Form state
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [ucraParticipants, setUcraParticipants] = useState(0);
+  const [formData, setFormData] = useState({
+    // Phase 1: Critical fields
+    salutation: '' as 'Herr' | 'Frau' | 'Divers' | '',
+    title: '' as '' | 'Dr.' | 'Prof.' | 'Prof. Dr.',
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    profession: '',
+    organization: '',
+    position: '',
+    department: '',
+
+    // Address
+    street: '',
+    city: '',
+    postal_code: '',
+    country: 'Deutschland',
+
+    // Phase 2: Event logistics
+    arrival_time: '',
+    activity_day2: '' as '' | 'workshop_a' | 'workshop_b' | 'exkursion' | 'andere',
+    bbq_attendance: false,
+    accommodation_needs: '',
+    special_requests: '',
+    support_activities: [] as string[], // Only for Orga category
+
+    // Requirements
+    dietary_requirements: '',
+    accessibility_needs: '',
+
+    // Billing (conditional - separate fields for CRM integration)
+    billing_street: '',
+    billing_city: '',
+    billing_postal_code: '',
+    billing_country: 'Deutschland',
+
+    // Other
+    comments: '',
+    consent_privacy: false,
+    consent_photos: false,
+    newsletter_signup: false,
+  });
+
+  // Load event and products
+  useEffect(() => {
+    async function loadData() {
+      try {
+        // Fetch event first
+        const eventRes = await eventApi.getEvent(id);
+        setEvent(eventRes);
+
+        // Try to fetch products, but don't fail if endpoint doesn't exist
+        try {
+          const productsRes = await eventApi.getEventProducts(id);
+          setProducts(productsRes.products);
+        } catch (prodError) {
+          console.log('Products endpoint not available yet, registration form may be limited');
+          // Continue without products - registration form will show error
+        }
+      } catch (err) {
+        setError('Fehler beim Laden der Veranstaltung');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, [id]);
+
+  // Auto-select first product when products load
+  useEffect(() => {
+    if (products.length > 0 && !selectedCategory) {
+      // Use categoryCode if available, otherwise fall back to product.id
+      const categoryCode = products[0].customProperties?.categoryCode || products[0].id;
+      setSelectedCategory(categoryCode);
+    }
+  }, [products]);
+
+  // Calculate total price
+  const calculateTotalPrice = () => {
+    if (!selectedCategory) return 0;
+
+    // Use same product finding logic as below
+    const selectedProduct = products.find((p) => {
+      // Extract category code from this product
+      if (p.customProperties?.categoryCode) {
+        return p.customProperties.categoryCode === selectedCategory;
+      }
+
+      // Extract from product name (e.g., "9. HaffSymposium (Ameos)" -> "ameos")
+      const nameMatch = p.name.match(/\(([^)]+)\)/i);
+      if (nameMatch) {
+        const extractedCode = nameMatch[1].toLowerCase().trim();
+        return extractedCode === selectedCategory;
+      }
+
+      return p.id === selectedCategory;
+    });
+
+    if (!selectedProduct) return 0;
+
+    let total = selectedProduct.customProperties.price;
+
+    // Add UCRA addon if selected (find by name, not ID)
+    if (ucraParticipants > 0) {
+      const ucraAddon = selectedProduct.customProperties.addons.find(
+        (a) => a.name?.toLowerCase().includes('ucra') || a.name?.toLowerCase().includes('bootsfahrt')
+      );
+      if (ucraAddon && ucraAddon.pricePerUnit) {
+        total += ucraAddon.pricePerUnit * ucraParticipants;
+      }
+    }
+
+    return total;
+  };
+
+  const selectedProduct = products.find((p) => {
+    // Extract category code from this product
+    if (p.customProperties?.categoryCode) {
+      return p.customProperties.categoryCode === selectedCategory;
+    }
+
+    // Extract from product name (e.g., "9. HaffSymposium (Ameos)" -> "ameos")
+    const nameMatch = p.name.match(/\(([^)]+)\)/i);
+    if (nameMatch) {
+      const extractedCode = nameMatch[1].toLowerCase().trim();
+      return extractedCode === selectedCategory;
+    }
+
+    return p.id === selectedCategory;
+  });
+
+  // Check for UCRA addon by name (more flexible than checking ID)
+  const hasUcraAddon = selectedProduct?.customProperties.addons.some(
+    (a) => a.name?.toLowerCase().includes('ucra') || a.name?.toLowerCase().includes('bootsfahrt')
+  );
+
+  // Get the actual UCRA addon for pricing
+  const ucraAddon = selectedProduct?.customProperties.addons.find(
+    (a) => a.name?.toLowerCase().includes('ucra') || a.name?.toLowerCase().includes('bootsfahrt')
+  );
+
+  const totalPrice = calculateTotalPrice();
+
+  // Extract category code from selected product (same logic as in the form)
+  const getCategoryCode = (product: Product | undefined) => {
+    if (!product) return '';
+
+    if (product.customProperties?.categoryCode) {
+      return product.customProperties.categoryCode;
+    }
+
+    // Extract from product name (e.g., "9. HaffSymposium (Ameos)" -> "ameos")
+    const nameMatch = product.name.match(/\(([^)]+)\)/i);
+    if (nameMatch) {
+      return nameMatch[1].toLowerCase().trim();
+    }
+
+    return '';
+  };
+
+  const categoryCode = getCategoryCode(selectedProduct);
+
+  // Check if billing address is required (no employer invoice configured)
+  const requiresBillingAddress = selectedProduct && !selectedProduct.customProperties.invoiceConfig;
+
+  // Conditional display logic based on category
+  const showUcraCost = ['external', 'standard', 'extern', 'ameos', 'haffnet'].includes(categoryCode);
+  const ucraIsFree = ['speaker', 'referent', 'sponsor', 'orga', 'organisation'].includes(categoryCode);
+  const showEmployerNote = categoryCode === 'ameos';
+  const isOrgaCategory = ['orga', 'organisation'].includes(categoryCode);
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedProduct) {
+      setError('Bitte wählen Sie eine Kategorie');
+      return;
+    }
+
+    if (!formData.consent_privacy) {
+      setError('Bitte akzeptieren Sie die Datenschutzerklärung');
+      return;
+    }
+
+    if (!formData.salutation) {
+      setError('Bitte wählen Sie eine Anrede');
+      return;
+    }
+
+    if (requiresBillingAddress && (!formData.billing_street || !formData.billing_city || !formData.billing_postal_code)) {
+      setError('Bitte füllen Sie alle Rechnungsadressfelder aus');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await workflowApi.submitRegistration({
+        eventId: id,
+        eventType: 'haffsymposium_registration',
+        productId: selectedProduct.id,
+
+        customerData: {
+          email: formData.email,
+          firstName: formData.first_name,
+          lastName: formData.last_name,
+          phone: formData.phone || undefined,
+          salutation: formData.salutation,
+          title: formData.title || undefined,
+          organization: formData.organization || undefined,
+        },
+
+        formResponses: {
+          attendee_category: selectedCategory,
+
+          // Personal info with new fields
+          salutation: formData.salutation,
+          title: formData.title || undefined,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          email: formData.email,
+          phone: formData.phone || undefined,
+          profession: formData.profession || undefined,
+          organization: formData.organization || undefined,
+          position: formData.position || undefined,
+          department: formData.department || undefined,
+
+          // Address
+          street: formData.street || undefined,
+          city: formData.city || undefined,
+          postal_code: formData.postal_code || undefined,
+          country: formData.country,
+
+          // Event logistics (Phase 2)
+          arrival_time: formData.arrival_time || undefined,
+          activity_day2: formData.activity_day2 || undefined,
+          bbq_attendance: formData.bbq_attendance || undefined,
+          accommodation_needs: formData.accommodation_needs || undefined,
+          special_requests: formData.special_requests || undefined,
+          support_activities: formData.support_activities.length > 0 ? formData.support_activities : undefined,
+
+          // Requirements
+          dietary_requirements: formData.dietary_requirements || undefined,
+          accessibility_needs: formData.accessibility_needs || undefined,
+
+          // Billing (structured fields for CRM integration)
+          billing_street: formData.billing_street || undefined,
+          billing_city: formData.billing_city || undefined,
+          billing_postal_code: formData.billing_postal_code || undefined,
+          billing_country: formData.billing_country || undefined,
+
+          // Add-ons
+          ucra_participants: ucraParticipants || undefined,
+
+          // Comments & Consent
+          comments: formData.comments || undefined,
+          consent_privacy: formData.consent_privacy,
+          consent_photos: formData.consent_photos || undefined,
+          newsletter_signup: formData.newsletter_signup || undefined,
+        },
+
+        transactionData: {
+          productId: selectedProduct.id,
+          price: totalPrice,
+          currency: 'EUR',
+          breakdown: {
+            basePrice: selectedProduct.customProperties.price,
+            addons: ucraParticipants > 0 && ucraAddon ? [{
+              id: ucraAddon.id,
+              name: ucraAddon.name,
+              quantity: ucraParticipants,
+              pricePerUnit: ucraAddon.pricePerUnit,
+              total: ucraAddon.pricePerUnit * ucraParticipants,
+            }] : [],
+            subtotal: totalPrice,
+            total: totalPrice,
+          },
+        },
+
+        metadata: {
+          source: 'website',
+          userAgent: navigator.userAgent,
+        },
+      });
+
+      if (response.status === 'success' && response.data) {
+        // Redirect to confirmation page
+        router.push(response.data.confirmationUrl);
+      } else {
+        throw new Error(response.message || 'Registrierung fehlgeschlagen');
+      }
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      setError(err.message || 'Fehler bei der Anmeldung. Bitte versuchen Sie es erneut.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Lädt...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !event) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link href="/events" className="text-green-600 hover:text-green-700">
+            Zurück zu Veranstaltungen
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) return null;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
+      <div className="container mx-auto px-4 max-w-3xl">
+        {/* Header */}
+        <div className="mb-8">
+          <Link
+            href={`/events/${id}`}
+            className="inline-flex items-center text-green-600 hover:text-green-700 mb-4 transition-colors"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Zurück zur Veranstaltung
+          </Link>
+
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Anmeldung: {event.name}
+          </h1>
+          <p className="text-gray-600">
+            Bitte füllen Sie das Formular aus, um sich anzumelden.
+          </p>
+        </div>
+
+        {/* Guest vs Login Options */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={() => setIsGuest(true)}
+              className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                isGuest
+                  ? 'border-green-600 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="text-center">
+                <div className="font-semibold text-gray-900 mb-1">Als Gast anmelden</div>
+                <div className="text-sm text-gray-600">Schnelle Anmeldung ohne Konto</div>
+              </div>
+            </button>
+            <button
+              onClick={() => router.push(`/anmelden?redirect=/events/${id}/register`)}
+              className="flex-1 p-4 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-all"
+            >
+              <div className="text-center">
+                <div className="font-semibold text-gray-900 mb-1">Mit Konto anmelden</div>
+                <div className="text-sm text-gray-600">Profil nutzen und Buchungen verwalten</div>
+              </div>
+            </button>
+          </div>
+          {isGuest && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Tipp:</strong> Mit einem kostenlosen Konto können Sie Ihre Buchungen verwalten und CME-Zertifikate einsehen.{' '}
+                <Link href="/registrieren" className="underline hover:text-blue-900">
+                  Jetzt registrieren
+                </Link>
+              </p>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Category Selection - Simple "Who are you?" approach */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              Wer sind Sie? *
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Bitte wählen Sie Ihre Teilnehmerkategorie
+            </p>
+
+            <div className="space-y-2">
+              {products.map((product) => {
+                // Extract category from product name or use categoryCode
+                const extractCategoryCode = () => {
+                  if (product.customProperties?.categoryCode) {
+                    return product.customProperties.categoryCode;
+                  }
+
+                  // Extract from product name (e.g., "9. HaffSymposium (Ameos)" -> "ameos")
+                  const nameMatch = product.name.match(/\(([^)]+)\)/i);
+                  if (nameMatch) {
+                    return nameMatch[1].toLowerCase().trim();
+                  }
+
+                  return product.id;
+                };
+
+                const categoryIdentifier = extractCategoryCode();
+                const hasEmployerInvoice = product.customProperties.invoiceConfig;
+                const isFree = product.customProperties.price === 0;
+
+                // Map product names to formatted "Ich bin..." labels
+                const getLabelText = () => {
+                  // Use categoryLabel if available
+                  if (product.customProperties.categoryLabel) {
+                    return product.customProperties.categoryLabel;
+                  }
+
+                  // Map based on extracted category code
+                  const code = categoryIdentifier.toLowerCase();
+                  const formatMap: Record<string, string> = {
+                    'ameos': 'AMEOS Mitarbeiter/in',
+                    'standard': 'Externe/r Teilnehmer/in',
+                    'external': 'Externe/r Teilnehmer/in',
+                    'extern': 'Externe/r Teilnehmer/in',
+                    'haffnet': 'HaffNet Mitglied',
+                    'speaker': 'Referent/in',
+                    'referent': 'Referent/in',
+                    'sponsor': 'Sponsor',
+                    'orga': 'Mitglied des Orga-Teams',
+                    'organisation': 'Mitglied des Orga-Teams',
+                  };
+
+                  return formatMap[code] || product.name;
+                };
+
+                // Generate helper text based on category
+                let helperText = '';
+                if (isFree) {
+                  helperText = 'Kostenlose Teilnahme';
+                } else if (hasEmployerInvoice) {
+                  helperText = 'Arbeitgeber übernimmt Kosten';
+                } else {
+                  helperText = `Teilnahmegebühr: ${(product.customProperties.price / 100).toFixed(2)} €`;
+                }
+
+                return (
+                  <label
+                    key={product.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedCategory === categoryIdentifier
+                        ? 'border-green-600 bg-green-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="category"
+                      value={categoryIdentifier}
+                      checked={selectedCategory === categoryIdentifier}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value);
+                        setUcraParticipants(0);
+                      }}
+                      className="w-4 h-4 accent-green-600 cursor-pointer shrink-0"
+                      style={{ accentColor: '#16a34a' }}
+                      required
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">
+                        Ich bin {getLabelText()}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {helperText}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* UCRA Addon */}
+          {hasUcraAddon && selectedCategory && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Zusätzliche Optionen
+              </h2>
+
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">UCRA Abendveranstaltung</h3>
+                    <p className="text-sm text-gray-600">
+                      Bootstour auf dem Haff mit Abendessen
+                    </p>
+                  </div>
+                  {showUcraCost && ucraAddon && (
+                    <span className="text-green-600 font-semibold">
+                      {(ucraAddon.pricePerUnit / 100).toFixed(2)} € / Person
+                    </span>
+                  )}
+                  {ucraIsFree && (
+                    <span className="text-green-600 font-semibold">Kostenlos</span>
+                  )}
+                </div>
+
+                {showUcraCost && ucraAddon && (
+                  <p className="text-sm text-orange-600 mb-3">
+                    Kosten: {(ucraAddon.pricePerUnit / 100).toFixed(2)} € pro Person (zahlbar vor Ort)
+                  </p>
+                )}
+
+                {showEmployerNote && ucraAddon && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-md p-3 mb-3">
+                    <p className="text-sm text-orange-800">
+                      <strong>Hinweis für AMEOS-Mitarbeiter:</strong> Die Teilnahmegebühr wird von Ihrem Arbeitgeber übernommen. Die UCRA-Kosten ({(ucraAddon.pricePerUnit / 100).toFixed(2)} € pro Person) sind vor Ort zu zahlen.
+                    </p>
+                  </div>
+                )}
+
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Anzahl Personen (max. 2)
+                </label>
+                <select
+                  value={ucraParticipants}
+                  onChange={(e) => setUcraParticipants(parseInt(e.target.value))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                >
+                  <option value="0">Nicht teilnehmen</option>
+                  <option value="1">1 Person</option>
+                  <option value="2">2 Personen</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Personal Information */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Persönliche Daten
+            </h2>
+
+            <div className="grid gap-4">
+              {/* Salutation & Title Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Anrede *
+                  </label>
+                  <select
+                    value={formData.salutation}
+                    onChange={(e) => setFormData({ ...formData, salutation: e.target.value as any })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                    required
+                  >
+                    <option value="">Bitte wählen</option>
+                    <option value="Herr">Herr</option>
+                    <option value="Frau">Frau</option>
+                    <option value="Divers">Divers</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Titel
+                  </label>
+                  <select
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value as any })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  >
+                    <option value="">Kein Titel</option>
+                    <option value="Dr.">Dr.</option>
+                    <option value="Prof.">Prof.</option>
+                    <option value="Prof. Dr.">Prof. Dr.</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* First Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vorname *
+                </label>
+                <input
+                  type="text"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  required
+                />
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nachname *
+                </label>
+                <input
+                  type="text"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  required
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  E-Mail *
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  required
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Telefon
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+
+              {/* Organization */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Organisation
+                </label>
+                <input
+                  type="text"
+                  value={formData.organization}
+                  onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+
+              {/* Profession */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fachrichtung / Beruf
+                </label>
+                <input
+                  type="text"
+                  value={formData.profession}
+                  onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  placeholder="z.B. Fachärztin für Allgemeinmedizin oder Physiotherapeut"
+                />
+              </div>
+
+              {/* Position */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Position
+                </label>
+                <input
+                  type="text"
+                  value={formData.position}
+                  onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+
+              {/* Department */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Abteilung
+                </label>
+                <input
+                  type="text"
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Event Logistics Section */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Veranstaltungsplanung
+            </h2>
+
+            <div className="grid gap-4">
+              {/* Orga Team Support Activities (Only for Orga) */}
+              {isOrgaCategory && (
+                <div className="border border-orange-200 bg-orange-50 rounded-lg p-4 mb-4">
+                  <label className="block text-sm font-medium text-gray-900 mb-3">
+                    Unterstützung bei Veranstaltungstätigkeiten
+                  </label>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Bei welchen Aktivitäten möchten Sie das Orga-Team unterstützen? (Mehrfachauswahl möglich)
+                  </p>
+                  <div className="space-y-2">
+                    {[
+                      { value: 'setup', label: 'Aufbau und Vorbereitung' },
+                      { value: 'registration', label: 'Registrierung und Check-in' },
+                      { value: 'catering', label: 'Catering-Betreuung' },
+                      { value: 'tech_support', label: 'Technische Unterstützung' },
+                      { value: 'workshop', label: 'Workshop-Betreuung' },
+                      { value: 'activities', label: 'Aktivitäten-Koordination' },
+                      { value: 'teardown', label: 'Abbau und Nachbereitung' },
+                    ].map((activity) => (
+                      <label key={activity.value} className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.support_activities.includes(activity.value)}
+                          onChange={(e) => {
+                            const newActivities = e.target.checked
+                              ? [...formData.support_activities, activity.value]
+                              : formData.support_activities.filter((a) => a !== activity.value);
+                            setFormData({ ...formData, support_activities: newActivities });
+                          }}
+                          className="mr-3 w-4 h-4 accent-orange-600 cursor-pointer"
+                          style={{ accentColor: '#ea580c' }}
+                        />
+                        <span className="text-sm text-gray-700">{activity.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Arrival Time - Only for non-Orga categories */}
+              {!isOrgaCategory && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Geplante Anreisezeit am 31.05.2026
+                  </label>
+                  <input
+                    type="time"
+                    value={formData.arrival_time}
+                    onChange={(e) => setFormData({ ...formData, arrival_time: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  />
+                </div>
+              )}
+
+              {/* Day 2 Activity - Only for non-Orga categories */}
+              {!isOrgaCategory && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Aktivität am 01.06.2026 (Tag 2)
+                  </label>
+                  <select
+                    value={formData.activity_day2}
+                    onChange={(e) => setFormData({ ...formData, activity_day2: e.target.value as any })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  >
+                    <option value="">Bitte wählen</option>
+                    <option value="workshop_a">Workshop A</option>
+                    <option value="workshop_b">Workshop B</option>
+                    <option value="exkursion">Exkursion</option>
+                    <option value="andere">Andere Aktivität</option>
+                  </select>
+                </div>
+              )}
+
+              {/* BBQ Attendance - For ALL categories */}
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.bbq_attendance}
+                  onChange={(e) => setFormData({ ...formData, bbq_attendance: e.target.checked })}
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer shrink-0"
+                  style={{ accentColor: '#16a34a' }}
+                />
+                <span className="text-sm text-gray-700">
+                  Ich nehme am Grillen & Chillen bei Uwe's Bootsverleih teil
+                </span>
+              </label>
+
+              {/* Accommodation Needs - Only for non-Orga categories */}
+              {!isOrgaCategory && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Übernachtungswünsche
+                  </label>
+                  <textarea
+                    value={formData.accommodation_needs}
+                    onChange={(e) => setFormData({ ...formData, accommodation_needs: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                    rows={3}
+                    placeholder="Benötigen Sie eine Übernachtung? Besondere Wünsche?"
+                  />
+                </div>
+              )}
+
+              {/* Special Requests - Only for non-Orga categories */}
+              {!isOrgaCategory && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Besondere Hinweise
+                  </label>
+                  <textarea
+                    value={formData.special_requests}
+                    onChange={(e) => setFormData({ ...formData, special_requests: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                    rows={3}
+                    placeholder="z.B. Informationen zu einer Begleitperson, Barrierefreiheit, etc."
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Requirements & Billing */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Zusätzliche Informationen
+            </h2>
+
+            <div className="grid gap-4">
+              {/* Dietary Requirements */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Besondere Ernährungsbedürfnisse
+                </label>
+                <textarea
+                  value={formData.dietary_requirements}
+                  onChange={(e) => setFormData({ ...formData, dietary_requirements: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  rows={2}
+                  placeholder="z.B. Vegetarisch, Vegan, Allergien, etc."
+                />
+              </div>
+
+              {/* Accessibility Needs */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Barrierefreiheit / Besondere Bedürfnisse
+                </label>
+                <textarea
+                  value={formData.accessibility_needs}
+                  onChange={(e) => setFormData({ ...formData, accessibility_needs: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  rows={2}
+                  placeholder="Besondere Bedürfnisse..."
+                />
+              </div>
+
+              {/* Billing Address - Only show if customer payment required (not for AMEOS) */}
+              {requiresBillingAddress && (
+                <div className="border-t pt-4 mt-2">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                    Rechnungsadresse *
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Bitte geben Sie die Adresse an, an die die Rechnung geschickt werden soll.
+                  </p>
+
+                  <div className="grid gap-4">
+                    {/* Street */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Straße und Hausnummer *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.billing_street}
+                        onChange={(e) => setFormData({ ...formData, billing_street: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                        placeholder="z.B. Musterstraße 123"
+                        required
+                      />
+                    </div>
+
+                    {/* Postal Code and City */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          PLZ *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.billing_postal_code}
+                          onChange={(e) => setFormData({ ...formData, billing_postal_code: e.target.value })}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                          placeholder="12345"
+                          required
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Ort *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.billing_city}
+                          onChange={(e) => setFormData({ ...formData, billing_city: e.target.value })}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                          placeholder="z.B. Berlin"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Country */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Land *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.billing_country}
+                        onChange={(e) => setFormData({ ...formData, billing_country: e.target.value })}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                        placeholder="Deutschland"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comments */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Weitere Kommentare
+                </label>
+                <textarea
+                  value={formData.comments}
+                  onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+                  rows={3}
+                  placeholder="Weitere Anmerkungen oder Fragen..."
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Consents */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              Einwilligungen
+            </h2>
+
+            <div className="space-y-3">
+              {/* Privacy Consent */}
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.consent_privacy}
+                  onChange={(e) => setFormData({ ...formData, consent_privacy: e.target.checked })}
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
+                  style={{ accentColor: '#16a34a' }}
+                  required
+                />
+                <span className="text-sm text-gray-700">
+                  Ich habe die{' '}
+                  <a href="/datenschutz" target="_blank" className="text-green-600 hover:text-green-700 underline">
+                    Datenschutzerklärung
+                  </a>{' '}
+                  gelesen und akzeptiere diese. *
+                </span>
+              </label>
+
+              {/* Photo Consent */}
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.consent_photos}
+                  onChange={(e) => setFormData({ ...formData, consent_photos: e.target.checked })}
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
+                  style={{ accentColor: '#16a34a' }}
+                />
+                <span className="text-sm text-gray-700">
+                  Ich bin damit einverstanden, dass Fotos von mir während der Veranstaltung gemacht und für Marketingzwecke verwendet werden dürfen.
+                </span>
+              </label>
+
+              {/* Newsletter */}
+              <label className="flex items-start cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.newsletter_signup}
+                  onChange={(e) => setFormData({ ...formData, newsletter_signup: e.target.checked })}
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
+                  style={{ accentColor: '#16a34a' }}
+                />
+                <span className="text-sm text-gray-700">
+                  Ich möchte den Newsletter der HaffNet Management GmbH erhalten und über zukünftige Veranstaltungen informiert werden.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Price Summary */}
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-700">Teilnahmegebühr:</span>
+              <span className="font-semibold">
+                {selectedProduct?.customProperties.price === 0
+                  ? 'Kostenlos'
+                  : `${(selectedProduct?.customProperties.price ?? 0) / 100} €`}
+              </span>
+            </div>
+
+            {ucraParticipants > 0 && ucraAddon && (
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-700">
+                  UCRA Abendveranstaltung ({ucraParticipants}x):
+                </span>
+                <span className="font-semibold">
+                  {((ucraAddon.pricePerUnit * ucraParticipants) / 100).toFixed(2)} €
+                </span>
+              </div>
+            )}
+
+            <div className="border-t border-green-300 mt-3 pt-3">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-bold text-gray-900">Gesamtbetrag:</span>
+                <span className="text-2xl font-bold text-green-600">
+                  {totalPrice === 0 ? 'Kostenlos' : `${(totalPrice / 100).toFixed(2)} €`}
+                </span>
+              </div>
+            </div>
+
+            {selectedProduct?.customProperties.invoiceConfig && (
+              <p className="text-sm text-gray-600 mt-3">
+                Die Rechnung wird an Ihren Arbeitgeber gestellt.
+              </p>
+            )}
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-red-800">{error}</p>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <div className="flex gap-4">
+            <Link
+              href={`/events/${event.id}`}
+              className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 text-center font-semibold py-3 px-6 rounded-lg transition-colors"
+            >
+              Abbrechen
+            </Link>
+            <button
+              type="submit"
+              disabled={submitting || !selectedCategory || !formData.consent_privacy}
+              className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Wird gesendet...
+                </span>
+              ) : (
+                'Verbindlich anmelden'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
