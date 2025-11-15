@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { eventApi } from '@/lib/api-client';
+import { getCapacityData, formatCapacityText, getCapacityWarning } from '@/lib/capacity-utils';
 
 export default async function EventsPage() {
   // Fetch all published events
@@ -45,10 +46,12 @@ function EventCard({ event }: { event: any }) {
   // Use top-level dates if available, otherwise fall back to customProperties
   const startDate = new Date(event.startDate || event.customProperties.startDate);
   const endDate = new Date(event.endDate || event.customProperties.endDate);
-  // Default values since API doesn't include these yet
-  const maxCapacity = event.maxCapacity || 100;
-  const currentRegistrations = event.currentRegistrations || 0;
-  const spotsRemaining = maxCapacity - currentRegistrations;
+
+  // Get capacity data using utility function
+  const capacityData = getCapacityData(event);
+  const capacityText = formatCapacityText(event);
+  const capacityWarning = getCapacityWarning(event);
+
   const isRegistrationOpen = event.registrationOpen !== false;
 
   return (
@@ -116,12 +119,14 @@ function EventCard({ event }: { event: any }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             <span>
-              {currentRegistrations} / {maxCapacity} Teilnehmer
+              {capacityText}
             </span>
           </div>
-          {spotsRemaining > 0 && spotsRemaining <= 20 && (
-            <span className="text-orange-600 font-medium">
-              Nur noch {spotsRemaining} Plätze!
+          {capacityWarning && (
+            <span className={`font-medium ${
+              capacityData.isFull ? 'text-red-600' : 'text-orange-600'
+            }`}>
+              {capacityWarning}
             </span>
           )}
         </div>

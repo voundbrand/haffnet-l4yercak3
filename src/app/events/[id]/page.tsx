@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eventApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { getCapacityData, formatCapacityText, formatSpotsRemainingText, getCapacityWarning } from '@/lib/capacity-utils';
 
 interface EventDetailPageProps {
   params: Promise<{
@@ -41,11 +42,14 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     // Use top-level dates if available, otherwise fall back to customProperties
     const startDate = new Date(event.startDate || event.customProperties.startDate);
     const endDate = new Date(event.endDate || event.customProperties.endDate);
-    const maxCapacity = event.maxCapacity || 100;
-    const currentRegistrations = event.currentRegistrations || 0;
-    const spotsRemaining = maxCapacity - currentRegistrations;
+
+    // Get capacity data using utility function
+    const capacityData = getCapacityData(event);
+    const capacityText = formatCapacityText(event);
+    const spotsRemainingText = formatSpotsRemainingText(event);
+    const capacityWarning = getCapacityWarning(event);
+
     const isRegistrationOpen = event.registrationOpen !== false;
-    const isFull = spotsRemaining <= 0;
 
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -120,14 +124,17 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     <div>
                       <p className="font-semibold text-gray-900">Verfügbare Plätze</p>
                       <p className="text-gray-600">
-                        {currentRegistrations} / {maxCapacity} Teilnehmer angemeldet
+                        {capacityText}
                       </p>
-                      {spotsRemaining > 0 && (
-                        <p className="text-green-600 font-medium">
-                          Noch {spotsRemaining} Plätze verfügbar
+                      {spotsRemainingText && !capacityData.isFull && (
+                        <p className={`font-medium ${
+                          capacityData.isUnlimited ? 'text-blue-600' :
+                          capacityData.isAlmostFull ? 'text-orange-600' : 'text-green-600'
+                        }`}>
+                          {spotsRemainingText}
                         </p>
                       )}
-                      {isFull && (
+                      {capacityData.isFull && (
                         <p className="text-red-600 font-medium">
                           Ausgebucht
                         </p>
@@ -246,9 +253,11 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                       </Link>
                     </div>
 
-                    {spotsRemaining > 0 && spotsRemaining <= 20 && (
-                      <p className="text-xs text-orange-600 text-center mt-2">
-                        Nur noch {spotsRemaining} Plätze verfügbar!
+                    {capacityWarning && (
+                      <p className={`text-xs text-center mt-2 ${
+                        capacityData.isFull ? 'text-red-600' : 'text-orange-600'
+                      }`}>
+                        {capacityWarning}
                       </p>
                     )}
                   </>
