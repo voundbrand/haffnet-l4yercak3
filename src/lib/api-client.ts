@@ -170,7 +170,7 @@ export const workflowApi = {
     return apiFetch<RegistrationResponse>('/workflows/trigger', {
       method: 'POST',
       body: JSON.stringify({
-        trigger: 'event_registration_complete',
+        trigger: 'api_call',
         inputData: data,
       }),
     });
@@ -253,7 +253,13 @@ export interface Event {
   location?: string;
   capacity?: number; // Max capacity from backend
   registrations?: number; // Current registrations count
-  agenda?: any[];
+  agenda?: Array<{
+    time?: string;
+    title?: string;
+    description?: string;
+    speaker?: string;
+    location?: string;
+  }>;
 
   // Legacy support for customProperties (may not exist in API response)
   customProperties?: {
@@ -278,8 +284,14 @@ export interface Event {
       closeDate: number;
       isOpen?: boolean;
     };
-    agenda?: any;
-    metadata?: any;
+    agenda?: Array<{
+      time?: string;
+      title?: string;
+      description?: string;
+      speaker?: string;
+      location?: string;
+    }>;
+    metadata?: Record<string, unknown>;
   };
 
   createdAt?: number;
@@ -319,7 +331,7 @@ export interface Product {
       available?: boolean;
       displayInCart?: boolean;
       icon?: string;
-      formFieldMapping?: Record<string, any>;
+      formFieldMapping?: Record<string, unknown>;
       taxable?: boolean;
     }>;
   };
@@ -525,7 +537,7 @@ export interface Ticket {
         participants: number;
       };
     };
-    registrationData: Record<string, any>;
+    registrationData: Record<string, unknown>;
     ticketNumber: string;
     qrCode: string;
     purchaseDate: number;
