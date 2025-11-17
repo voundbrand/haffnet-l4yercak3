@@ -163,14 +163,10 @@ export const workflowApi = {
   /**
    * Trigger event registration workflow (v2.0)
    *
-   * TEMPORARY: Using /workflows/trigger endpoint because /events/:eventId/register
-   * requires session-based auth (cookies), but we're using Bearer token auth.
-   *
-   * TODO: Switch to /events/:eventId/register once backend adds Bearer auth support
+   * Uses /workflows/trigger endpoint which supports Bearer token authentication.
+   * Payload format is v2.0 compliant (formId, products array, etc.)
    */
   async submitRegistration(data: RegistrationInput) {
-    // TEMPORARY: Use old endpoint with v2.0 payload format
-    // The backend's workflow trigger can handle the v2.0 payload
     return apiFetch<RegistrationResponse>('/workflows/trigger', {
       method: 'POST',
       body: JSON.stringify({
