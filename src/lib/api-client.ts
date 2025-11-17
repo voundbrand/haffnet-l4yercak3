@@ -161,15 +161,13 @@ export const formApi = {
  */
 export const workflowApi = {
   /**
-   * Trigger event registration workflow
+   * Trigger event registration workflow (v2.0)
    */
   async submitRegistration(data: RegistrationInput) {
-    return apiFetch<RegistrationResponse>('/workflows/trigger', {
+    // NEW v2.0: Use /events/:eventId/register endpoint
+    return apiFetch<RegistrationResponse>(`/events/${data.eventId}/register`, {
       method: 'POST',
-      body: JSON.stringify({
-        trigger: 'event_registration_complete',
-        inputData: data,
-      }),
+      body: JSON.stringify(data),
     });
   },
 };
@@ -240,18 +238,29 @@ export const transactionApi = {
 export interface Event {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   subtype: string;
   status: string;
-  customProperties: {
-    startDate: number;
-    endDate: number;
-    location: string;
+
+  // Top-level properties from flattened API response
+  startDate?: number;
+  endDate?: number;
+  location?: string;
+  capacity?: number; // Max capacity from backend
+  registrations?: number; // Current registrations count
+  agenda?: any[];
+
+  // Legacy support for customProperties (may not exist in API response)
+  customProperties?: {
+    startDate?: number;
+    endDate?: number;
+    location?: string;
     venue?: string;
     timezone?: string;
     maxCapacity?: number;
     currentRegistrations?: number;
     spotsRemaining?: number;
+    capacity?: number;
     address?: {
       street: string;
       city: string;
@@ -264,16 +273,14 @@ export interface Event {
       closeDate: number;
       isOpen?: boolean;
     };
-    capacity?: any;
     agenda?: any;
     metadata?: any;
   };
+
   createdAt?: number;
   updatedAt?: number;
-  // Top-level properties for compatibility
-  startDate?: number;
-  endDate?: number;
-  location?: string;
+
+  // Deprecated - use top-level fields instead
   maxCapacity?: number;
   currentRegistrations?: number;
   registrationOpen?: boolean;
@@ -356,7 +363,15 @@ export interface FormField {
 export interface RegistrationInput {
   eventId: string;
   eventType?: string;
-  productId: string;
+
+  // NEW v2.0: Form ID now required
+  formId: string;
+
+  // CHANGED v2.0: Products array instead of single productId
+  products: Array<{
+    productId: string;
+    quantity: number;
+  }>;
 
   customerData: {
     email: string;
@@ -418,12 +433,10 @@ export interface RegistrationInput {
   };
 
   transactionData: {
-    productId: string;
-    price: number;
     currency: string;
-    breakdown?: {
+    breakdown: {
       basePrice: number;
-      addons: Array<{
+      addons?: Array<{
         id: string;
         name: string;
         quantity: number;
@@ -435,6 +448,9 @@ export interface RegistrationInput {
       total: number;
     };
   };
+
+  // NEW v2.0: Optional CRM organization ID override
+  crmOrganizationId?: string;
 
   paymentMethod?: {
     type: 'stripe' | 'paypal' | 'invoice';
@@ -457,22 +473,24 @@ export interface RegistrationInput {
 }
 
 export interface RegistrationResponse {
-  status: 'success' | 'error';
+  success: boolean;
   message: string;
   data?: {
+    contactId: string;
     ticketId: string;
     ticketNumber: string;
-    eventId: string;
-    eventName: string;
-    contactId: string;
+    qrCode: string;
+    transactionId: string;
     invoiceId?: string;
-    confirmationUrl: string;
-    pricing: {
-      total: number;
-      currency: string;
-      billingMethod: string;
-    };
+    invoiceNumber?: string;
+    billingMethod: 'employer_invoice' | 'customer_payment' | 'free';
+    confirmationEmailSent: boolean;
+    // Legacy fields for backward compatibility
+    eventId?: string;
+    eventName?: string;
+    confirmationUrl?: string;
   };
+  error?: string;
   code?: string;
   errors?: Array<{
     field: string;

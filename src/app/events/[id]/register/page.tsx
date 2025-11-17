@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { eventApi, workflowApi, type Product, type Event } from '@/lib/api-client';
 
+// NEW v2.0: Form ID constant for registration
+const FORM_ID = 'form_haffsymposium_2025_registration';
+
 interface RegisterPageProps {
   params: Promise<{
     id: string;
@@ -226,10 +229,31 @@ export default function RegisterPage({ params }: RegisterPageProps) {
     setError(null);
 
     try {
+      // NEW v2.0: Build products array
+      const products = [
+        {
+          productId: selectedProduct.id,
+          quantity: 1,
+        },
+      ];
+
+      // Add UCRA addon as separate product if selected
+      if (ucraParticipants > 0 && ucraAddon) {
+        products.push({
+          productId: ucraAddon.id,
+          quantity: ucraParticipants,
+        });
+      }
+
       const response = await workflowApi.submitRegistration({
         eventId: id,
         eventType: 'haffsymposium_registration',
-        productId: selectedProduct.id,
+
+        // NEW v2.0: Form ID is required
+        formId: FORM_ID,
+
+        // NEW v2.0: Products array instead of single productId
+        products,
 
         customerData: {
           email: formData.email,
@@ -291,8 +315,6 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         },
 
         transactionData: {
-          productId: selectedProduct.id,
-          price: totalPrice,
           currency: 'EUR',
           breakdown: {
             basePrice: selectedProduct.customProperties.price,
@@ -314,15 +336,26 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         },
       });
 
-      if (response.status === 'success' && response.data) {
-        // Redirect to confirmation page
-        router.push(response.data.confirmationUrl);
+      // NEW v2.0: Handle new response format
+      if (response.success && response.data) {
+        // Use confirmationUrl if available (backward compatibility)
+        // Otherwise, redirect to ticket page
+        const redirectUrl = response.data.confirmationUrl
+          || `/tickets/${response.data.ticketId}/confirmation?ticket=${response.data.ticketNumber}`;
+        router.push(redirectUrl);
       } else {
-        throw new Error(response.message || 'Registrierung fehlgeschlagen');
+        throw new Error(response.message || response.error || 'Registrierung fehlgeschlagen');
       }
     } catch (err: any) {
       console.error('Registration error:', err);
-      setError(err.message || 'Fehler bei der Anmeldung. Bitte versuchen Sie es erneut.');
+
+      // NEW v2.0: Handle field-specific validation errors
+      if (err.data?.errors) {
+        const errorMessages = err.data.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ');
+        setError(`Validierungsfehler: ${errorMessages}`);
+      } else {
+        setError(err.message || 'Fehler bei der Anmeldung. Bitte versuchen Sie es erneut.');
+      }
     } finally {
       setSubmitting(false);
     }

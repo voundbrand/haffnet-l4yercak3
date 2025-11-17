@@ -29,6 +29,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     }
 
     console.log('Found event:', event.name);
+    console.log('Event object:', JSON.stringify(event, null, 2));
 
     // Try to fetch products, but handle if endpoint doesn't exist
     let products: any[] = [];
@@ -40,8 +41,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     }
 
     // Use top-level dates if available, otherwise fall back to customProperties
-    const startDate = new Date(event.startDate || event.customProperties.startDate);
-    const endDate = new Date(event.endDate || event.customProperties.endDate);
+    const startDate = new Date(event.startDate || event.customProperties?.startDate || Date.now());
+    const endDate = new Date(event.endDate || event.customProperties?.endDate || Date.now());
 
     // Get capacity data using utility function
     const capacityData = getCapacityData(event);
@@ -207,7 +208,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   Anmeldung
                 </h3>
 
-                {!isRegistrationOpen && !isFull && (
+                {!isRegistrationOpen && !capacityData.isFull && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                     <p className="text-sm text-yellow-800">
                       Die Anmeldung ist derzeit geschlossen.
@@ -215,7 +216,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   </div>
                 )}
 
-                {isFull && (
+                {capacityData.isFull && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                     <p className="text-sm text-red-800">
                       Diese Veranstaltung ist ausgebucht.
@@ -223,7 +224,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   </div>
                 )}
 
-                {isRegistrationOpen && !isFull && (
+                {isRegistrationOpen && !capacityData.isFull && (
                   <>
                     <p className="text-sm text-gray-600 mb-6">
                       Melden Sie sich jetzt an und sichern Sie sich Ihren Platz.
