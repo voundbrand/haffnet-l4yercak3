@@ -3,15 +3,10 @@
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { eventApi, checkoutApi, type Product, type Event } from '@/lib/api-client';
-import { getPageContent, getCheckoutInstanceId } from '@/lib/convex-client';
-import { useFrontendAuth } from '@/hooks/useFrontendAuth';
+import { eventApi, workflowApi, type Product, type Event } from '@/lib/api-client';
 
 // NEW v2.0: Form ID constant for registration
 const FORM_ID = 'form_haffsymposium_2025_registration';
-
-// Organization slug for Convex CMS
-const ORG_SLUG = 'voundbrand';
 
 interface RegisterPageProps {
   params: Promise<{
@@ -22,13 +17,12 @@ interface RegisterPageProps {
 export default function RegisterPage({ params }: RegisterPageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const { isAuthenticated, user } = useFrontendAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [checkoutInstanceId, setCheckoutInstanceId] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(true); // Default to guest checkout
 
   // Form state
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -85,28 +79,11 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         const eventRes = await eventApi.getEvent(id);
         setEvent(eventRes);
 
-        // Fetch checkout instance ID from Convex CMS
-        try {
-          const pageContent = await getPageContent(ORG_SLUG, '/events');
-          const checkoutId = getCheckoutInstanceId(pageContent);
-
-          if (checkoutId) {
-            setCheckoutInstanceId(checkoutId);
-            console.log('[Registration] Loaded checkout instance ID from Convex CMS:', checkoutId);
-          } else {
-            console.warn('[Registration] No checkout configuration found in Convex CMS');
-            setError('Checkout-Konfiguration fehlt. Bitte kontaktieren Sie den Support.');
-          }
-        } catch (convexError) {
-          console.error('[Registration] Failed to fetch checkout config from Convex:', convexError);
-          setError('Fehler beim Laden der Checkout-Konfiguration');
-        }
-
         // Try to fetch products, but don't fail if endpoint doesn't exist
         try {
           const productsRes = await eventApi.getEventProducts(id);
           setProducts(productsRes.products);
-        } catch {
+        } catch (prodError) {
           console.log('Products endpoint not available yet, registration form may be limited');
           // Continue without products - registration form will show error
         }
@@ -128,7 +105,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
       const categoryCode = products[0].customProperties?.categoryCode || products[0].id;
       setSelectedCategory(categoryCode);
     }
-  }, [products, selectedCategory]);
+  }, [products]);
 
   // Calculate total price
   const calculateTotalPrice = () => {
@@ -224,7 +201,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
   const showEmployerNote = categoryCode === 'ameos';
   const isOrgaCategory = ['orga', 'organisation'].includes(categoryCode);
 
-  // Handle form submission - NOW USES CHECKOUT API
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -252,7 +229,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
     setError(null);
 
     try {
-      // NEW: Build products array
+      // NEW v2.0: Build products array
       const products = [
         {
           productId: selectedProduct.id,
@@ -268,13 +245,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         });
       }
 
-      // NEW: Use checkout API with dynamic checkout instance ID from Convex CMS
-      if (!checkoutInstanceId) {
-        setError('Checkout-Konfiguration fehlt. Bitte laden Sie die Seite neu oder kontaktieren Sie den Support.');
-        return;
-      }
-
-      const response = await checkoutApi.submitRegistration({
+      const response = await workflowApi.submitRegistration({
         eventId: id,
         eventType: 'haffsymposium_registration',
 
@@ -363,9 +334,9 @@ export default function RegisterPage({ params }: RegisterPageProps) {
           source: 'website',
           userAgent: navigator.userAgent,
         },
-      }, checkoutInstanceId); // Pass checkout instance ID as second parameter
+      });
 
-      // Handle new response format from checkout API
+      // NEW v2.0: Handle new response format
       if (response.success && response.data) {
         // Use confirmationUrl if available (backward compatibility)
         // Otherwise, redirect to ticket page
@@ -375,16 +346,15 @@ export default function RegisterPage({ params }: RegisterPageProps) {
       } else {
         throw new Error(response.message || response.error || 'Registrierung fehlgeschlagen');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Registration error:', err);
 
-      // Handle field-specific validation errors
-      const error = err as { data?: { errors?: Array<{ field: string; message: string }> }; message?: string };
-      if (error.data?.errors) {
-        const errorMessages = error.data.errors.map((e) => `${e.field}: ${e.message}`).join(', ');
+      // NEW v2.0: Handle field-specific validation errors
+      if (err.data?.errors) {
+        const errorMessages = err.data.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ');
         setError(`Validierungsfehler: ${errorMessages}`);
       } else {
-        setError(error.message || (err instanceof Error ? err.message : 'Fehler bei der Anmeldung. Bitte versuchen Sie es erneut.'));
+        setError(err.message || 'Fehler bei der Anmeldung. Bitte versuchen Sie es erneut.');
       }
     } finally {
       setSubmitting(false);
@@ -418,7 +388,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
   if (!event) return null;
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-gray-50 to-white py-12">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
       <div className="container mx-auto px-4 max-w-3xl">
         {/* Header */}
         <div className="mb-8">
@@ -440,55 +410,41 @@ export default function RegisterPage({ params }: RegisterPageProps) {
           </p>
         </div>
 
-        {/* Guest vs Login Options - Auth-aware */}
+        {/* Guest vs Login Options */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          {isAuthenticated && user ? (
-            // User is logged in - show status
-            <div className="text-center py-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg mb-3">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="font-semibold text-green-700">
-                  Angemeldet als {user.firstName} {user.lastName}
-                </span>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={() => setIsGuest(true)}
+              className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                isGuest
+                  ? 'border-green-600 bg-green-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="text-center">
+                <div className="font-semibold text-gray-900 mb-1">Als Gast anmelden</div>
+                <div className="text-sm text-gray-600">Schnelle Anmeldung ohne Konto</div>
               </div>
-              <p className="text-sm text-gray-600 mb-2">
-                Ihre Buchung wird automatisch mit Ihrem Konto verknüpft
-              </p>
-              <p className="text-xs text-gray-500">
-                Email: {user.email}
+            </button>
+            <button
+              onClick={() => router.push(`/anmelden?redirect=/events/${id}/register`)}
+              className="flex-1 p-4 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-all"
+            >
+              <div className="text-center">
+                <div className="font-semibold text-gray-900 mb-1">Mit Konto anmelden</div>
+                <div className="text-sm text-gray-600">Profil nutzen und Buchungen verwalten</div>
+              </div>
+            </button>
+          </div>
+          {isGuest && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Tipp:</strong> Mit einem kostenlosen Konto können Sie Ihre Buchungen verwalten und CME-Zertifikate einsehen.{' '}
+                <Link href="/registrieren" className="underline hover:text-blue-900">
+                  Jetzt registrieren
+                </Link>
               </p>
             </div>
-          ) : (
-            // User is NOT logged in - show both options
-            <>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1 p-4 rounded-lg border-2 border-green-600 bg-green-50">
-                  <div className="text-center">
-                    <div className="font-semibold text-gray-900 mb-1">Als Gast anmelden</div>
-                    <div className="text-sm text-gray-600">Schnelle Anmeldung ohne Konto</div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => router.push(`/anmelden?redirect=/events/${id}/register`)}
-                  className="flex-1 p-4 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-all"
-                >
-                  <div className="text-center">
-                    <div className="font-semibold text-gray-900 mb-1">Mit Konto anmelden</div>
-                    <div className="text-sm text-gray-600">Profil nutzen und Buchungen verwalten</div>
-                  </div>
-                </button>
-              </div>
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  💡 <strong>Tipp:</strong> Mit einem kostenlosen Konto können Sie Ihre Buchungen verwalten und CME-Zertifikate einsehen.{' '}
-                  <Link href="/registrieren" className="underline hover:text-blue-900">
-                    Jetzt registrieren
-                  </Link>
-                </p>
-              </div>
-            </>
           )}
         </div>
 
@@ -664,7 +620,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   </label>
                   <select
                     value={formData.salutation}
-                    onChange={(e) => setFormData({ ...formData, salutation: e.target.value as 'Herr' | 'Frau' | 'Divers' | '' })}
+                    onChange={(e) => setFormData({ ...formData, salutation: e.target.value as any })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                     required
                   >
@@ -681,7 +637,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   </label>
                   <select
                     value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value as '' | 'Dr.' | 'Prof.' | 'Prof. Dr.' })}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value as any })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                   >
                     <option value="">Kein Titel</option>
@@ -871,7 +827,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   </label>
                   <select
                     value={formData.activity_day2}
-                    onChange={(e) => setFormData({ ...formData, activity_day2: e.target.value as '' | 'workshop_a' | 'workshop_b' | 'exkursion' | 'andere' })}
+                    onChange={(e) => setFormData({ ...formData, activity_day2: e.target.value as any })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                   >
                     <option value="">Bitte wählen</option>
@@ -893,7 +849,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">
-                  Ich nehme am Grillen & Chillen bei Uwe&apos;s Bootsverleih teil
+                  Ich nehme am Grillen & Chillen bei Uwe's Bootsverleih teil
                 </span>
               </label>
 
@@ -1069,7 +1025,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   type="checkbox"
                   checked={formData.consent_privacy}
                   onChange={(e) => setFormData({ ...formData, consent_privacy: e.target.checked })}
-                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer shrink-0"
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
                   style={{ accentColor: '#16a34a' }}
                   required
                 />
@@ -1088,7 +1044,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   type="checkbox"
                   checked={formData.consent_photos}
                   onChange={(e) => setFormData({ ...formData, consent_photos: e.target.checked })}
-                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer shrink-0"
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">
@@ -1102,7 +1058,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   type="checkbox"
                   checked={formData.newsletter_signup}
                   onChange={(e) => setFormData({ ...formData, newsletter_signup: e.target.checked })}
-                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer shrink-0"
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">

@@ -2,30 +2,23 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { User, Settings, Calendar, FileText, LogOut, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-// Mock user data - would come from auth context in real app
-const mockUser = {
-  salutation: "Herr",
-  title: "Dr.",
-  firstName: "Max",
-  lastName: "Mustermann",
-  email: "max.mustermann@beispiel.de",
-  phone: "+49 123 456789",
-  organization: {
-    name: "Universitätsklinikum Berlin",
-    role: "Oberarzt",
-    department: "Kardiologie",
-  },
-  profession: "Facharzt für Innere Medizin",
-  isLoggedIn: false, // Change to true to see logged-in state
-}
+import { useFrontendAuth } from "@/hooks/useFrontendAuth"
 
 export function UserMenu() {
+  const router = useRouter()
+  const { user, isAuthenticated, logout } = useFrontendAuth()
   const [isOpen, setIsOpen] = useState(false)
 
-  if (!mockUser.isLoggedIn) {
+  const handleLogout = async () => {
+    await logout()
+    setIsOpen(false)
+    router.push('/')
+  }
+
+  if (!isAuthenticated || !user) {
     // Show login/register buttons when not logged in
     return (
       <div className="flex items-center gap-3">
@@ -51,10 +44,10 @@ export function UserMenu() {
         </div>
         <div className="hidden md:block text-left">
           <div className="text-sm font-medium text-foreground">
-            {mockUser.title ? `${mockUser.title} ` : ''}{mockUser.firstName} {mockUser.lastName}
+            {user.firstName} {user.lastName}
           </div>
           <div className="text-xs text-muted-foreground">
-            {mockUser.organization.name}
+            {user.email}
           </div>
         </div>
         <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -74,18 +67,23 @@ export function UserMenu() {
             {/* User Info */}
             <div className="p-4 border-b border-border">
               <div className="font-medium text-foreground">
-                {mockUser.title ? `${mockUser.title} ` : ''}{mockUser.firstName} {mockUser.lastName}
+                {user.firstName} {user.lastName}
               </div>
               <div className="text-sm text-muted-foreground mt-1">
-                {mockUser.email}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {mockUser.organization.role} · {mockUser.organization.department}
+                {user.email}
               </div>
             </div>
 
             {/* Menu Items */}
             <div className="py-2">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-muted transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                <User className="w-4 h-4" />
+                <span>Dashboard</span>
+              </Link>
               <Link
                 href="/profil"
                 className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-muted transition-colors"
@@ -124,10 +122,7 @@ export function UserMenu() {
             <div className="border-t border-border py-2">
               <button
                 className="flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
-                onClick={() => {
-                  setIsOpen(false)
-                  // Handle logout
-                }}
+                onClick={handleLogout}
               >
                 <LogOut className="w-4 h-4" />
                 <span>Abmelden</span>

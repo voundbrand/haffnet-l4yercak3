@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eventApi } from '@/lib/api-client';
-import { Button } from '@/components/ui/button';
 import { getCapacityData, formatCapacityText, formatSpotsRemainingText, getCapacityWarning } from '@/lib/capacity-utils';
+import { EventRegistrationSidebar } from '@/components/EventRegistrationSidebar';
 
 interface EventDetailPageProps {
   params: Promise<{
@@ -203,78 +203,12 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
 
             {/* Sidebar */}
             <div className="md:col-span-1">
-              <div className="bg-white rounded-lg shadow-md p-6 sticky top-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">
-                  Anmeldung
-                </h3>
-
-                {!isRegistrationOpen && !capacityData.isFull && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm text-yellow-800">
-                      Die Anmeldung ist derzeit geschlossen.
-                    </p>
-                  </div>
-                )}
-
-                {capacityData.isFull && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                    <p className="text-sm text-red-800">
-                      Diese Veranstaltung ist ausgebucht.
-                    </p>
-                  </div>
-                )}
-
-                {isRegistrationOpen && !capacityData.isFull && (
-                  <>
-                    <p className="text-sm text-gray-600 mb-6">
-                      Melden Sie sich jetzt an und sichern Sie sich Ihren Platz.
-                    </p>
-
-                    {/* CTA Buttons */}
-                    <div className="space-y-3 mb-4">
-                      <Button size="lg" className="w-full" asChild>
-                        <Link href={`/events/${event.id}/register`}>
-                          Als Gast anmelden
-                        </Link>
-                      </Button>
-                      <Button size="lg" variant="outline" className="w-full" asChild>
-                        <Link href={`/anmelden?redirect=/events/${event.id}/register`}>
-                          Mit Konto anmelden
-                        </Link>
-                      </Button>
-                    </div>
-
-                    <div className="text-center text-sm text-gray-500 mb-4">
-                      Sichere Anmeldung über verschlüsselte Verbindung
-                    </div>
-
-                    <div className="text-center text-xs text-blue-600 mb-4">
-                      <Link href="/registrieren" className="hover:underline">
-                        Noch kein Konto? Jetzt registrieren
-                      </Link>
-                    </div>
-
-                    {capacityWarning && (
-                      <p className={`text-xs text-center mt-2 ${
-                        capacityData.isFull ? 'text-red-600' : 'text-orange-600'
-                      }`}>
-                        {capacityWarning}
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {/* Contact */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 mb-2">Fragen?</p>
-                  <a
-                    href="mailto:info@haffnet.de"
-                    className="text-sm text-green-600 hover:text-green-700"
-                  >
-                    info@haffnet.de
-                  </a>
-                </div>
-              </div>
+              <EventRegistrationSidebar
+                eventId={event.id}
+                isRegistrationOpen={isRegistrationOpen}
+                isFull={capacityData.isFull}
+                capacityWarning={capacityWarning || undefined}
+              />
             </div>
           </div>
         </div>

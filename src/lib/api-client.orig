@@ -3,14 +3,10 @@
  *
  * Handles all API requests to the L4yerCak3 backend with proper
  * authentication and error handling.
- *
- * NEW: Integrated with Checkout API for registrations
- * Uses Convex client for dynamic configuration
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
-const ORGANIZATION_ID = process.env.NEXT_PUBLIC_ORG_ID;
 
 if (!API_URL || !API_KEY) {
   throw new Error('Missing API configuration. Check .env.local file.');
@@ -161,201 +157,23 @@ export const formApi = {
 };
 
 /**
- * Checkout API - NEW
- *
- * Handles event registrations through the checkout system
- * Provides automatic: tickets, emails, CRM, invoices, PDFs
- */
-export const checkoutApi = {
-  /**
-   * Submit event registration via Checkout API
-   *
-   * This replaces the workflow API and provides automatic:
-   * - Ticket creation with QR codes
-   * - Email sending with PDF attachments
-   * - CRM contact/organization creation
-   * - Invoice generation (B2B)
-   * - Transaction records
-   * - Guest user accounts
-   * - Form response storage
-   *
-   * @param data - Registration input data
-   * @param checkoutInstanceId - Checkout instance ID from CMS (required)
-   */
-  async submitRegistration(
-    data: RegistrationInput,
-    checkoutInstanceId: string
-  ): Promise<RegistrationResponse> {
-    try {
-      console.log('[Checkout API] Starting registration...');
-
-      if (!checkoutInstanceId) {
-        throw new Error('Checkout instance ID is required. Please configure checkout in CMS.');
-      }
-
-      // STEP 1: Build checkout payload
-      const checkoutPayload = {
-        organizationId: ORGANIZATION_ID || '',
-        checkoutInstanceId: checkoutInstanceId,
-
-        // Extract product IDs and quantities from products array
-        productIds: data.products.map(p => p.productId),
-        quantities: data.products.map(p => p.quantity),
-
-        // Customer info
-        customerEmail: data.customerData.email,
-        customerName: [
-          data.customerData.salutation,
-          data.customerData.title,
-          data.customerData.firstName,
-          data.customerData.lastName,
-        ].filter(Boolean).join(' '),
-        customerPhone: data.customerData.phone,
-
-        // Payment method (free for now - can extend later)
-        paymentMethod: 'free' as const,
-
-        // Form responses (main ticket only)
-        formResponses: [
-          {
-            productId: data.products[0].productId,
-            ticketNumber: 1,
-            formId: data.formId,
-            responses: data.formResponses,
-            addedCosts: 0,
-          },
-        ],
-
-        // B2B fields (if organization provided)
-        ...(data.customerData.organization && {
-          transactionType: 'B2B' as const,
-          companyName: data.customerData.organization,
-          billingAddress: data.formResponses.billing_street && data.formResponses.billing_city ? {
-            line1: data.formResponses.billing_street,
-            city: data.formResponses.billing_city,
-            postalCode: data.formResponses.billing_postal_code || '',
-            country: data.formResponses.billing_country || 'Deutschland',
-          } : undefined,
-        }),
-      };
-
-      console.log('[Checkout API] Creating session...', {
-        productIds: checkoutPayload.productIds,
-        quantities: checkoutPayload.quantities,
-        customerEmail: checkoutPayload.customerEmail,
-      });
-
-      // STEP 2: Create checkout session
-      const sessionResponse = await apiFetch<{
-        checkoutSessionId: string;
-        sessionId: string;
-        clientSecret?: string;
-        requiresPayment: boolean;
-        amount: number;
-        currency: string;
-        expiresAt: number;
-      }>('/checkout/sessions', {
-        method: 'POST',
-        body: JSON.stringify(checkoutPayload),
-      });
-
-      console.log('[Checkout API] Session created:', sessionResponse.checkoutSessionId);
-
-      // STEP 3: Confirm checkout (for free events)
-      if (!sessionResponse.requiresPayment) {
-        const confirmResponse = await apiFetch<{
-          success: boolean;
-          purchasedItemIds: string[];
-          crmContactId?: string;
-          paymentId: string;
-          amount: number;
-          currency: string;
-          isGuestRegistration: boolean;
-          frontendUserId?: string;
-          invoiceType: 'none' | 'receipt' | 'manual_b2b' | 'manual_b2c' | 'employer';
-          downloadUrls: {
-            purchaseItems: string;
-            tickets?: string;
-            invoice?: string;
-          };
-        }>('/checkout/confirm', {
-          method: 'POST',
-          body: JSON.stringify({
-            checkoutSessionId: sessionResponse.checkoutSessionId,
-            sessionId: sessionResponse.sessionId,
-            paymentIntentId: 'free',
-          }),
-        });
-
-        console.log('[Checkout API] Registration complete!', {
-          success: confirmResponse.success,
-          ticketIds: confirmResponse.purchasedItemIds,
-          invoiceType: confirmResponse.invoiceType,
-        });
-
-        // Map checkout response to existing RegistrationResponse format
-        // This ensures backward compatibility with your existing code
-        return {
-          success: confirmResponse.success,
-          message: 'Registrierung erfolgreich abgeschlossen',
-          data: {
-            contactId: confirmResponse.crmContactId || '',
-            ticketId: confirmResponse.purchasedItemIds[0] || '',
-            ticketNumber: '1', // Will be in ticket details
-            qrCode: '', // Will be in ticket details
-            transactionId: confirmResponse.paymentId,
-            invoiceId: confirmResponse.invoiceType !== 'none' ? sessionResponse.checkoutSessionId : undefined,
-            invoiceNumber: undefined, // Will be generated if B2B
-            billingMethod: confirmResponse.invoiceType === 'employer'
-              ? 'employer_invoice'
-              : confirmResponse.invoiceType === 'none'
-                ? 'free'
-                : 'customer_payment',
-            confirmationEmailSent: true,
-            eventId: data.eventId,
-            eventName: '', // Not returned by checkout API
-            confirmationUrl: `/tickets/${confirmResponse.purchasedItemIds[0]}/confirmation?success=true`,
-          },
-        };
-      } else {
-        // TODO: Handle paid events (Stripe payment flow)
-        throw new Error('Paid events require Stripe integration - not yet implemented');
-      }
-    } catch (error) {
-      console.error('[Checkout API] Registration failed:', error);
-
-      // Map error to existing format
-      if (error instanceof Error) {
-        return {
-          success: false,
-          message: error.message,
-          error: error.message,
-        };
-      }
-
-      return {
-        success: false,
-        message: 'Unbekannter Fehler bei der Registrierung',
-        error: 'Unknown error',
-      };
-    }
-  },
-};
-
-/**
- * Legacy Workflow API (DEPRECATED - use checkoutApi instead)
+ * Workflow API
  */
 export const workflowApi = {
   /**
-   * @deprecated Use checkoutApi.submitRegistration instead
-   * Note: This now requires a checkoutInstanceId parameter
+   * Trigger event registration workflow (v2.0)
+   *
+   * Uses /workflows/trigger endpoint which supports Bearer token authentication.
+   * Payload format is v2.0 compliant (formId, products array, etc.)
    */
-  async submitRegistration(data: RegistrationInput, checkoutInstanceId?: string) {
-    console.warn('workflowApi.submitRegistration is deprecated. Use checkoutApi.submitRegistration instead.');
-    if (!checkoutInstanceId) {
-      throw new Error('Checkout instance ID is required. Please pass it as the second parameter.');
-    }
-    return checkoutApi.submitRegistration(data, checkoutInstanceId);
+  async submitRegistration(data: RegistrationInput) {
+    return apiFetch<RegistrationResponse>('/workflows/trigger', {
+      method: 'POST',
+      body: JSON.stringify({
+        trigger: 'api_call',
+        inputData: data,
+      }),
+    });
   },
 };
 

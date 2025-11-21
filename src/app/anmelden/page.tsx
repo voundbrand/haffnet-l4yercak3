@@ -1,8 +1,38 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Mail, Lock } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, Loader2 } from 'lucide-react';
+import { useFrontendAuth } from '@/hooks/useFrontendAuth';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login, loading } = useFrontendAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!email || !password) {
+      setError('Bitte füllen Sie alle Felder aus');
+      return;
+    }
+
+    const result = await login({ email, password });
+
+    if (result.success) {
+      // Redirect to dashboard or home
+      router.push('/dashboard');
+    } else {
+      setError(result.message || 'Anmeldung fehlgeschlagen');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
       <div className="container mx-auto px-4 max-w-md">
@@ -26,7 +56,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
@@ -39,7 +69,10 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="ihre.email@beispiel.de"
                 />
               </div>
@@ -57,18 +90,29 @@ export default function LoginPage() {
                   id="password"
                   name="password"
                   required
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="••••••••"
                 />
               </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
 
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <label className="flex items-center cursor-pointer">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 accent-green-600 cursor-pointer"
+                  disabled={loading}
+                  className="w-4 h-4 accent-green-600 cursor-pointer disabled:cursor-not-allowed"
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="ml-2 text-sm text-gray-600">
@@ -84,8 +128,15 @@ export default function LoginPage() {
             </div>
 
             {/* Submit Button */}
-            <Button type="submit" className="w-full" size="lg">
-              Anmelden
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Anmelden...
+                </>
+              ) : (
+                'Anmelden'
+              )}
             </Button>
           </form>
 

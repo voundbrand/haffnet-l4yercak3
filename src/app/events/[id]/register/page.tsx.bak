@@ -652,7 +652,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
           {/* Personal Information */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Persönliche Daten
+              Pers�nliche Daten
             </h2>
 
             <div className="grid gap-4">
@@ -668,7 +668,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                     required
                   >
-                    <option value="">Bitte wählen</option>
+                    <option value="">Bitte w�hlen</option>
                     <option value="Herr">Herr</option>
                     <option value="Frau">Frau</option>
                     <option value="Divers">Divers</option>
@@ -770,7 +770,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   value={formData.profession}
                   onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
-                  placeholder="z.B. Fachärztin für Allgemeinmedizin oder Physiotherapeut"
+                  placeholder="z.B. Fach�rztin f�r Allgemeinmedizin oder Physiotherapeut"
                 />
               </div>
 
@@ -813,19 +813,19 @@ export default function RegisterPage({ params }: RegisterPageProps) {
               {isOrgaCategory && (
                 <div className="border border-orange-200 bg-orange-50 rounded-lg p-4 mb-4">
                   <label className="block text-sm font-medium text-gray-900 mb-3">
-                    Unterstützung bei Veranstaltungstätigkeiten
+                    Unterst�tzung bei Veranstaltungst�tigkeiten
                   </label>
                   <p className="text-sm text-gray-600 mb-3">
-                    Bei welchen Aktivitäten möchten Sie das Orga-Team unterstützen? (Mehrfachauswahl möglich)
+                    Bei welchen Aktivit�ten m�chten Sie das Orga-Team unterst�tzen? (Mehrfachauswahl m�glich)
                   </p>
                   <div className="space-y-2">
                     {[
                       { value: 'setup', label: 'Aufbau und Vorbereitung' },
                       { value: 'registration', label: 'Registrierung und Check-in' },
                       { value: 'catering', label: 'Catering-Betreuung' },
-                      { value: 'tech_support', label: 'Technische Unterstützung' },
+                      { value: 'tech_support', label: 'Technische Unterst�tzung' },
                       { value: 'workshop', label: 'Workshop-Betreuung' },
-                      { value: 'activities', label: 'Aktivitäten-Koordination' },
+                      { value: 'activities', label: 'Aktivit�ten-Koordination' },
                       { value: 'teardown', label: 'Abbau und Nachbereitung' },
                     ].map((activity) => (
                       <label key={activity.value} className="flex items-center cursor-pointer">
@@ -867,18 +867,18 @@ export default function RegisterPage({ params }: RegisterPageProps) {
               {!isOrgaCategory && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Aktivität am 01.06.2026 (Tag 2)
+                    Aktivit�t am 01.06.2026 (Tag 2)
                   </label>
                   <select
                     value={formData.activity_day2}
                     onChange={(e) => setFormData({ ...formData, activity_day2: e.target.value as '' | 'workshop_a' | 'workshop_b' | 'exkursion' | 'andere' })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                   >
-                    <option value="">Bitte wählen</option>
+                    <option value="">Bitte w�hlen</option>
                     <option value="workshop_a">Workshop A</option>
                     <option value="workshop_b">Workshop B</option>
                     <option value="exkursion">Exkursion</option>
-                    <option value="andere">Andere Aktivität</option>
+                    <option value="andere">Andere Aktivit�t</option>
                   </select>
                 </div>
               )}
@@ -901,14 +901,14 @@ export default function RegisterPage({ params }: RegisterPageProps) {
               {!isOrgaCategory && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Übernachtungswünsche
+                    �bernachtungsw�nsche
                   </label>
                   <textarea
                     value={formData.accommodation_needs}
                     onChange={(e) => setFormData({ ...formData, accommodation_needs: e.target.value })}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                     rows={3}
-                    placeholder="Benötigen Sie eine Übernachtung? Besondere Wünsche?"
+                    placeholder="Ben�tigen Sie eine �bernachtung? Besondere W�nsche?"
                   />
                 </div>
               )}
@@ -934,14 +934,14 @@ export default function RegisterPage({ params }: RegisterPageProps) {
           {/* Requirements & Billing */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Zusätzliche Informationen
+              Zus�tzliche Informationen
             </h2>
 
             <div className="grid gap-4">
               {/* Dietary Requirements */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Besondere Ernährungsbedürfnisse
+                  Besondere Ern�hrungsbed�rfnisse
                 </label>
                 <textarea
                   value={formData.dietary_requirements}
@@ -955,14 +955,14 @@ export default function RegisterPage({ params }: RegisterPageProps) {
               {/* Accessibility Needs */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Barrierefreiheit / Besondere Bedürfnisse
+                  Barrierefreiheit / Besondere Bed�rfnisse
                 </label>
                 <textarea
                   value={formData.accessibility_needs}
                   onChange={(e) => setFormData({ ...formData, accessibility_needs: e.target.value })}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
                   rows={2}
-                  placeholder="Besondere Bedürfnisse..."
+                  placeholder="Besondere Bed�rfnisse..."
                 />
               </div>
 
@@ -980,14 +980,14 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                     {/* Street */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Straße und Hausnummer *
+                        Stra�e und Hausnummer *
                       </label>
                       <input
                         type="text"
                         value={formData.billing_street}
                         onChange={(e) => setFormData({ ...formData, billing_street: e.target.value })}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
-                        placeholder="z.B. Musterstraße 123"
+                        placeholder="z.B. Musterstra�e 123"
                         required
                       />
                     </div>
@@ -1076,7 +1076,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                 <span className="text-sm text-gray-700">
                   Ich habe die{' '}
                   <a href="/datenschutz" target="_blank" className="text-green-600 hover:text-green-700 underline">
-                    Datenschutzerklärung
+                    Datenschutzerkl�rung
                   </a>{' '}
                   gelesen und akzeptiere diese. *
                 </span>
@@ -1092,7 +1092,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">
-                  Ich bin damit einverstanden, dass Fotos von mir während der Veranstaltung gemacht und für Marketingzwecke verwendet werden dürfen.
+                  Ich bin damit einverstanden, dass Fotos von mir w�hrend der Veranstaltung gemacht und f�r Marketingzwecke verwendet werden d�rfen.
                 </span>
               </label>
 
@@ -1106,7 +1106,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">
-                  Ich möchte den Newsletter der HaffNet Management GmbH erhalten und über zukünftige Veranstaltungen informiert werden.
+                  Ich m�chte den Newsletter der HaffNet Management GmbH erhalten und �ber zuk�nftige Veranstaltungen informiert werden.
                 </span>
               </label>
             </div>
@@ -1115,11 +1115,11 @@ export default function RegisterPage({ params }: RegisterPageProps) {
           {/* Price Summary */}
           <div className="bg-green-50 border border-green-200 rounded-lg p-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-700">Teilnahmegebühr:</span>
+              <span className="text-gray-700">Teilnahmegeb�hr:</span>
               <span className="font-semibold">
                 {selectedProduct?.customProperties.price === 0
                   ? 'Kostenlos'
-                  : `${(selectedProduct?.customProperties.price ?? 0) / 100} €`}
+                  : `${(selectedProduct?.customProperties.price ?? 0) / 100} �`}
               </span>
             </div>
 
@@ -1129,7 +1129,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
                   UCRA Abendveranstaltung ({ucraParticipants}x):
                 </span>
                 <span className="font-semibold">
-                  {((ucraAddon.pricePerUnit * ucraParticipants) / 100).toFixed(2)} €
+                  {((ucraAddon.pricePerUnit * ucraParticipants) / 100).toFixed(2)} �
                 </span>
               </div>
             )}
@@ -1138,7 +1138,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold text-gray-900">Gesamtbetrag:</span>
                 <span className="text-2xl font-bold text-green-600">
-                  {totalPrice === 0 ? 'Kostenlos' : `${(totalPrice / 100).toFixed(2)} €`}
+                  {totalPrice === 0 ? 'Kostenlos' : `${(totalPrice / 100).toFixed(2)} �`}
                 </span>
               </div>
             </div>

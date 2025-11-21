@@ -1,8 +1,77 @@
+'use client';
+
 import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Mail, Lock, User, Building2, Phone } from 'lucide-react';
+import { ArrowLeft, Mail, Lock, User, Building2, Phone, Loader2 } from 'lucide-react';
+import { useFrontendAuth } from '@/hooks/useFrontendAuth';
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { register, loading } = useFrontendAuth();
+  const [formData, setFormData] = useState({
+    salutation: '',
+    title: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    organization: '',
+    profession: '',
+    position: '',
+    password: '',
+    confirmPassword: '',
+    acceptTerms: false,
+    newsletter: false,
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const handleChange = (field: string, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    // Validation
+    if (!formData.salutation || !formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+      setError('Bitte füllen Sie alle Pflichtfelder aus');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwörter stimmen nicht überein');
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError('Passwort muss mindestens 8 Zeichen lang sein');
+      return;
+    }
+
+    if (!formData.acceptTerms) {
+      setError('Bitte akzeptieren Sie die AGB und Datenschutzerklärung');
+      return;
+    }
+
+    const result = await register({
+      email: formData.email,
+      password: formData.password,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      phone: formData.phone || undefined,
+    });
+
+    if (result.success) {
+      // Redirect to dashboard
+      router.push('/dashboard');
+    } else {
+      setError(result.message || 'Registrierung fehlgeschlagen');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
       <div className="container mx-auto px-4 max-w-2xl">
@@ -26,7 +95,7 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          <form className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Personal Information */}
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -43,7 +112,10 @@ export default function RegisterPage() {
                     id="salutation"
                     name="salutation"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                    value={formData.salutation}
+                    onChange={(e) => handleChange('salutation', e.target.value)}
+                    disabled={loading}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">Bitte wählen</option>
                     <option value="Herr">Herr</option>
@@ -60,7 +132,10 @@ export default function RegisterPage() {
                   <select
                     id="title"
                     name="title"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                    value={formData.title}
+                    onChange={(e) => handleChange('title', e.target.value)}
+                    disabled={loading}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">Kein Titel</option>
                     <option value="Dr.">Dr.</option>
@@ -81,7 +156,10 @@ export default function RegisterPage() {
                       id="firstName"
                       name="firstName"
                       required
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.firstName}
+                      onChange={(e) => handleChange('firstName', e.target.value)}
+                      disabled={loading}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="Max"
                     />
                   </div>
@@ -97,7 +175,10 @@ export default function RegisterPage() {
                     id="lastName"
                     name="lastName"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                    value={formData.lastName}
+                    onChange={(e) => handleChange('lastName', e.target.value)}
+                    disabled={loading}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="Mustermann"
                   />
                 </div>
@@ -123,7 +204,10 @@ export default function RegisterPage() {
                       id="email"
                       name="email"
                       required
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.email}
+                      onChange={(e) => handleChange('email', e.target.value)}
+                      disabled={loading}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="ihre.email@beispiel.de"
                     />
                   </div>
@@ -140,7 +224,10 @@ export default function RegisterPage() {
                       type="tel"
                       id="phone"
                       name="phone"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.phone}
+                      onChange={(e) => handleChange('phone', e.target.value)}
+                      disabled={loading}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="+49 123 456789"
                     />
                   </div>
@@ -166,7 +253,10 @@ export default function RegisterPage() {
                       type="text"
                       id="organization"
                       name="organization"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.organization}
+                      onChange={(e) => handleChange('organization', e.target.value)}
+                      disabled={loading}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="z.B. Universitätsklinikum Berlin"
                     />
                   </div>
@@ -182,7 +272,10 @@ export default function RegisterPage() {
                       type="text"
                       id="profession"
                       name="profession"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.profession}
+                      onChange={(e) => handleChange('profession', e.target.value)}
+                      disabled={loading}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="z.B. Allgemeinmedizin"
                     />
                   </div>
@@ -196,7 +289,10 @@ export default function RegisterPage() {
                       type="text"
                       id="position"
                       name="position"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.position}
+                      onChange={(e) => handleChange('position', e.target.value)}
+                      disabled={loading}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="z.B. Oberarzt"
                     />
                   </div>
@@ -223,8 +319,12 @@ export default function RegisterPage() {
                       id="password"
                       name="password"
                       required
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.password}
+                      onChange={(e) => handleChange('password', e.target.value)}
+                      disabled={loading}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="••••••••"
+                      minLength={8}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -244,7 +344,10 @@ export default function RegisterPage() {
                       id="confirmPassword"
                       name="confirmPassword"
                       required
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent"
+                      value={formData.confirmPassword}
+                      onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                      disabled={loading}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-600 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="••••••••"
                     />
                   </div>
@@ -252,13 +355,23 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
             {/* Agreements */}
             <div className="space-y-3 pt-4 border-t border-gray-200">
               <label className="flex items-start cursor-pointer">
                 <input
                   type="checkbox"
                   required
-                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
+                  checked={formData.acceptTerms}
+                  onChange={(e) => handleChange('acceptTerms', e.target.checked)}
+                  disabled={loading}
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0 disabled:cursor-not-allowed"
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">
@@ -277,7 +390,10 @@ export default function RegisterPage() {
               <label className="flex items-start cursor-pointer">
                 <input
                   type="checkbox"
-                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0"
+                  checked={formData.newsletter}
+                  onChange={(e) => handleChange('newsletter', e.target.checked)}
+                  disabled={loading}
+                  className="mt-0.5 mr-3 w-5 h-5 accent-green-600 cursor-pointer flex-shrink-0 disabled:cursor-not-allowed"
                   style={{ accentColor: '#16a34a' }}
                 />
                 <span className="text-sm text-gray-700">
@@ -287,8 +403,15 @@ export default function RegisterPage() {
             </div>
 
             {/* Submit Button */}
-            <Button type="submit" className="w-full" size="lg">
-              Konto erstellen
+            <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Konto wird erstellt...
+                </>
+              ) : (
+                'Konto erstellen'
+              )}
             </Button>
           </form>
 

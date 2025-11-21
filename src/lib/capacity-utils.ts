@@ -21,17 +21,20 @@ export function getCapacityData(event: any): {
   isAlmostFull: boolean;
 } {
   // Try to get maxCapacity from various locations
+  // API returns flat structure with top-level fields
   const maxCapacity =
+    event.capacity ?? // Top-level capacity field from API
     event.maxCapacity ??
+    event.customProperties?.capacity ??
     event.customProperties?.maxCapacity ??
-    event.customProperties?.capacity?.max ??
     null;
 
   // Get current registrations
+  // TODO: Backend needs to add currentRegistrations field
   const currentRegistrations =
     event.currentRegistrations ??
+    event.registrations ??
     event.customProperties?.currentRegistrations ??
-    event.customProperties?.capacity?.current ??
     0;
 
   // Calculate spots remaining

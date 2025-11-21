@@ -178,25 +178,15 @@ export const checkoutApi = {
    * - Transaction records
    * - Guest user accounts
    * - Form response storage
-   *
-   * @param data - Registration input data
-   * @param checkoutInstanceId - Checkout instance ID from CMS (required)
    */
-  async submitRegistration(
-    data: RegistrationInput,
-    checkoutInstanceId: string
-  ): Promise<RegistrationResponse> {
+  async submitRegistration(data: RegistrationInput): Promise<RegistrationResponse> {
     try {
-      console.log('[Checkout API] Starting registration...');
-
-      if (!checkoutInstanceId) {
-        throw new Error('Checkout instance ID is required. Please configure checkout in CMS.');
-      }
+      console.log('=� [Checkout API] Starting registration...');
 
       // STEP 1: Build checkout payload
       const checkoutPayload = {
         organizationId: ORGANIZATION_ID || '',
-        checkoutInstanceId: checkoutInstanceId,
+        checkoutInstanceId: CHECKOUT_INSTANCE_ID || '',
 
         // Extract product IDs and quantities from products array
         productIds: data.products.map(p => p.productId),
@@ -239,7 +229,7 @@ export const checkoutApi = {
         }),
       };
 
-      console.log('[Checkout API] Creating session...', {
+      console.log('=� [Checkout API] Creating session...', {
         productIds: checkoutPayload.productIds,
         quantities: checkoutPayload.quantities,
         customerEmail: checkoutPayload.customerEmail,
@@ -259,7 +249,7 @@ export const checkoutApi = {
         body: JSON.stringify(checkoutPayload),
       });
 
-      console.log('[Checkout API] Session created:', sessionResponse.checkoutSessionId);
+      console.log(' [Checkout API] Session created:', sessionResponse.checkoutSessionId);
 
       // STEP 3: Confirm checkout (for free events)
       if (!sessionResponse.requiresPayment) {
@@ -287,7 +277,7 @@ export const checkoutApi = {
           }),
         });
 
-        console.log('[Checkout API] Registration complete!', {
+        console.log(' [Checkout API] Registration complete!', {
           success: confirmResponse.success,
           ticketIds: confirmResponse.purchasedItemIds,
           invoiceType: confirmResponse.invoiceType,
@@ -322,7 +312,7 @@ export const checkoutApi = {
         throw new Error('Paid events require Stripe integration - not yet implemented');
       }
     } catch (error) {
-      console.error('[Checkout API] Registration failed:', error);
+      console.error('L [Checkout API] Registration failed:', error);
 
       // Map error to existing format
       if (error instanceof Error) {
@@ -348,14 +338,10 @@ export const checkoutApi = {
 export const workflowApi = {
   /**
    * @deprecated Use checkoutApi.submitRegistration instead
-   * Note: This now requires a checkoutInstanceId parameter
    */
-  async submitRegistration(data: RegistrationInput, checkoutInstanceId?: string) {
-    console.warn('workflowApi.submitRegistration is deprecated. Use checkoutApi.submitRegistration instead.');
-    if (!checkoutInstanceId) {
-      throw new Error('Checkout instance ID is required. Please pass it as the second parameter.');
-    }
-    return checkoutApi.submitRegistration(data, checkoutInstanceId);
+  async submitRegistration(data: RegistrationInput) {
+    console.warn('� workflowApi.submitRegistration is deprecated. Use checkoutApi.submitRegistration instead.');
+    return checkoutApi.submitRegistration(data);
   },
 };
 
