@@ -30,12 +30,28 @@ export default function FormPage({ params }: FormPageProps) {
   useEffect(() => {
     async function loadForm() {
       try {
+        console.log('[Form Page] Fetching form:', id);
         const formRes = await formApi.getPublicForm(id);
-        setForm(formRes.data);
+        console.log('[Form Page] API Response:', formRes);
+
+        // Handle different response structures from backend
+        const formObject = formRes.data || formRes;
+        console.log('[Form Page] Form object:', formObject);
+
+        if (!formObject || !formObject.customProperties || !formObject.customProperties.formSchema) {
+          console.error('[Form Page] Invalid form structure:', {
+            hasFormObject: !!formObject,
+            hasCustomProperties: !!(formObject && formObject.customProperties),
+            hasFormSchema: !!(formObject && formObject.customProperties && formObject.customProperties.formSchema),
+          });
+          throw new Error('Invalid form data structure');
+        }
+
+        setForm(formObject);
 
         // Initialize form data with default values
         const initialData: Record<string, unknown> = {};
-        const schema = formRes.data.customProperties.formSchema;
+        const schema = formObject.customProperties.formSchema;
 
         schema.fields.forEach((field) => {
           if (field.type === 'checkbox') {
@@ -50,9 +66,10 @@ export default function FormPage({ params }: FormPageProps) {
         });
 
         setFormData(initialData);
+        console.log('[Form Page] Form loaded successfully');
       } catch (err) {
         setError('Fehler beim Laden des Formulars');
-        console.error(err);
+        console.error('[Form Page] Load error:', err);
       } finally {
         setLoading(false);
       }
