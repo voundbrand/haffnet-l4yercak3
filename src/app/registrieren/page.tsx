@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Mail, Lock, User, Building2, Phone, Loader2 } from 'lucide-react';
 import { useFrontendAuth } from '@/hooks/useFrontendAuth';
+import { userApi } from '@/lib/api-client';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -56,19 +57,65 @@ export default function RegisterPage() {
       return;
     }
 
-    const result = await register({
-      email: formData.email,
-      password: formData.password,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      phone: formData.phone || undefined,
-    });
+    try {
+      // STEP 1: Create Convex auth user
+      console.log('[Registration] Creating Convex auth user...');
+      const authResult = await register({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone || undefined,
+      });
 
-    if (result.success) {
-      // Redirect to dashboard
-      router.push('/dashboard');
-    } else {
-      setError(result.message || 'Registrierung fehlgeschlagen');
+      if (!authResult.success) {
+        setError(authResult.message || 'Registrierung fehlgeschlagen');
+        return;
+      }
+
+      // Get user ID from the auth result
+      const convexUserId = authResult.user?._id || '';
+      console.log('[Registration] Convex user created:', convexUserId);
+
+      // STEP 2: Create Backend API user profile
+      console.log('[Registration] Creating Backend API user profile...');
+      const backendResult = await userApi.registerUser({
+        email: formData.email,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone || undefined,
+        convexUserId, // Link to Convex user
+      });
+
+      if (backendResult.success) {
+        // SUCCESS: User created in both systems
+        console.log('[Registration] ✅ User created in both systems:', {
+          convexUserId,
+          frontendUserId: backendResult.frontendUserId,
+          crmContactId: backendResult.crmContactId,
+        });
+
+        // TODO: Store Backend IDs in Convex user record
+        // This would require a Convex mutation to update the user
+        // For now, we just log it
+
+        // Redirect to dashboard
+        router.push('/dashboard');
+      } else {
+        // Backend creation failed, but Convex user exists
+        console.warn('[Registration] ⚠️ User created in Convex but not in Backend:', {
+          convexUserId,
+          backendError: backendResult.error,
+        });
+
+        // Still let them proceed - they can use the app
+        // Backend sync can be retried later
+        router.push('/dashboard?warning=backend_sync_pending');
+      }
+
+    } catch (error) {
+      console.error('[Registration] Error:', error);
+      setError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
     }
   };
 

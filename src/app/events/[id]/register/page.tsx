@@ -7,12 +7,6 @@ import { eventApi, checkoutApi, type Product, type Event } from '@/lib/api-clien
 import { getPageContent, getCheckoutInstanceId } from '@/lib/convex-client';
 import { useFrontendAuth } from '@/hooks/useFrontendAuth';
 
-// NEW v2.0: Form ID constant for registration
-const FORM_ID = 'form_haffsymposium_2025_registration';
-
-// Organization slug for Convex CMS
-const ORG_SLUG = 'voundbrand';
-
 interface RegisterPageProps {
   params: Promise<{
     id: string;
@@ -29,6 +23,7 @@ export default function RegisterPage({ params }: RegisterPageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkoutInstanceId, setCheckoutInstanceId] = useState<string | null>(null);
+  const [formId, setFormId] = useState<string | null>(null);
 
   // Form state
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -85,21 +80,42 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         const eventRes = await eventApi.getEvent(id);
         setEvent(eventRes);
 
-        // Fetch checkout instance ID from Convex CMS
-        try {
-          const pageContent = await getPageContent(ORG_SLUG, '/events');
-          const checkoutId = getCheckoutInstanceId(pageContent);
+        // Get organization ID and form ID from event (set by backend)
+        const organizationId = eventRes.organizationId;
+        const eventFormId = eventRes.registrationFormId;
+        const eventCheckoutId = eventRes.checkoutInstanceId;
 
-          if (checkoutId) {
-            setCheckoutInstanceId(checkoutId);
-            console.log('[Registration] Loaded checkout instance ID from Convex CMS:', checkoutId);
-          } else {
-            console.warn('[Registration] No checkout configuration found in Convex CMS');
-            setError('Checkout-Konfiguration fehlt. Bitte kontaktieren Sie den Support.');
+        if (eventFormId) {
+          setFormId(eventFormId);
+          console.log('[Registration] Form ID from backend:', eventFormId);
+        } else {
+          console.warn('[Registration] No form ID in event data');
+        }
+
+        // Use checkout instance ID from event if available, otherwise try Convex CMS
+        if (eventCheckoutId) {
+          setCheckoutInstanceId(eventCheckoutId);
+          console.log('[Registration] Checkout instance ID from backend:', eventCheckoutId);
+        } else if (organizationId) {
+          // Fallback: Try to fetch from Convex CMS using organization ID
+          try {
+            const pageContent = await getPageContent(organizationId, '/events');
+            const checkoutId = getCheckoutInstanceId(pageContent);
+
+            if (checkoutId) {
+              setCheckoutInstanceId(checkoutId);
+              console.log('[Registration] Loaded checkout instance ID from Convex CMS:', checkoutId);
+            } else {
+              console.warn('[Registration] No checkout configuration found');
+              setError('Checkout-Konfiguration fehlt. Bitte kontaktieren Sie den Support.');
+            }
+          } catch (convexError) {
+            console.error('[Registration] Failed to fetch checkout config from Convex:', convexError);
+            setError('Fehler beim Laden der Checkout-Konfiguration');
           }
-        } catch (convexError) {
-          console.error('[Registration] Failed to fetch checkout config from Convex:', convexError);
-          setError('Fehler beim Laden der Checkout-Konfiguration');
+        } else {
+          console.warn('[Registration] No checkout instance ID or organization ID found');
+          setError('Veranstaltungskonfiguration fehlt. Bitte kontaktieren Sie den Support.');
         }
 
         // Try to fetch products, but don't fail if endpoint doesn't exist
@@ -268,9 +284,14 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         });
       }
 
-      // NEW: Use checkout API with dynamic checkout instance ID from Convex CMS
+      // Validate required backend configuration
       if (!checkoutInstanceId) {
         setError('Checkout-Konfiguration fehlt. Bitte laden Sie die Seite neu oder kontaktieren Sie den Support.');
+        return;
+      }
+
+      if (!formId) {
+        setError('Formular-Konfiguration fehlt. Diese Veranstaltung ist nicht korrekt konfiguriert. Bitte kontaktieren Sie den Support.');
         return;
       }
 
@@ -278,8 +299,8 @@ export default function RegisterPage({ params }: RegisterPageProps) {
         eventId: id,
         eventType: 'haffsymposium_registration',
 
-        // NEW v2.0: Form ID is required
-        formId: FORM_ID,
+        // Form ID from backend API (required)
+        formId: formId,
 
         // NEW v2.0: Products array instead of single productId
         products,
@@ -367,6 +388,15 @@ export default function RegisterPage({ params }: RegisterPageProps) {
 
       // Handle new response format from checkout API
       if (response.success && response.data) {
+        // Log user creation info
+        if (response.data.frontendUserId) {
+          console.log('[Registration] Frontend user created:', {
+            userId: response.data.frontendUserId,
+            isGuest: response.data.isGuestRegistration,
+            contactId: response.data.contactId,
+          });
+        }
+
         // Use confirmationUrl if available (backward compatibility)
         // Otherwise, redirect to ticket page
         const redirectUrl = response.data.confirmationUrl

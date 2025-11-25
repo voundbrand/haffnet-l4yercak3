@@ -151,12 +151,69 @@ export const eventApi = {
 export const formApi = {
   /**
    * Get published form by ID (public endpoint)
+   *
+   * This fetches a form from web publishing just like events.
+   * The form includes its schema and all configuration needed to render it.
    */
   async getPublicForm(formId: string) {
     return apiFetch<{
       status: string;
       data: Form;
     }>(`/forms/public/${formId}`);
+  },
+
+  /**
+   * Submit form response via workflow trigger
+   *
+   * Uses the same workflow trigger API pattern as event registration.
+   * The backend determines which workflow to run based on the form type.
+   */
+  async submitForm(data: {
+    formId: string;
+    responses: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }) {
+    try {
+      console.log('[Form API] Submitting form:', {
+        formId: data.formId,
+        responseCount: Object.keys(data.responses).length,
+      });
+
+      // Use workflow trigger API with form-specific trigger
+      const response = await apiFetch<{
+        success: boolean;
+        message?: string;
+        data?: {
+          submissionId: string;
+          formId: string;
+          submittedAt: string;
+        };
+      }>('/workflows/trigger', {
+        method: 'POST',
+        body: JSON.stringify({
+          trigger: 'form_submission',
+          inputData: {
+            formId: data.formId,
+            formResponses: data.responses,
+            metadata: {
+              ...data.metadata,
+              submittedAt: new Date().toISOString(),
+              source: 'website',
+            },
+          },
+        }),
+      });
+
+      if (response.success) {
+        console.log('[Form API] Form submitted successfully:', response.data);
+        return response;
+      }
+
+      throw new Error(response.message || 'Form submission failed');
+    } catch (error) {
+      console.error('[Form API] Submission failed:', error);
+      throw error;
+    }
   },
 };
 
@@ -312,6 +369,9 @@ export const checkoutApi = {
                 ? 'free'
                 : 'customer_payment',
             confirmationEmailSent: true,
+            // NEW: User account information from backend
+            frontendUserId: confirmResponse.frontendUserId,
+            isGuestRegistration: confirmResponse.isGuestRegistration,
             eventId: data.eventId,
             eventName: '', // Not returned by checkout API
             confirmationUrl: `/tickets/${confirmResponse.purchasedItemIds[0]}/confirmation?success=true`,
@@ -419,6 +479,137 @@ export const transactionApi = {
 };
 
 /**
+ * User API
+ *
+ * Handles user registration and profile management.
+ * Creates users in both Convex (auth) and Backend API (CRM/profiles).
+ */
+export const userApi = {
+  /**
+   * Register a new user in Backend API
+   *
+   * This creates a user account in the Backend API's CRM system.
+   * It's called AFTER Convex auth registration to keep both systems in sync.
+   *
+   * Uses the workflow trigger API with event type 'user_registration'.
+   * This triggers a backend workflow that creates:
+   * - CRM contact record
+   * - Frontend user profile
+   * - Welcome email
+   *
+   * @param userData - User registration data
+   * @param convexUserId - Convex auth user ID for linking
+   * @returns Backend user ID and contact ID
+   */
+  async registerUser(userData: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    convexUserId: string;
+  }): Promise<{
+    success: boolean;
+    frontendUserId?: string;
+    crmContactId?: string;
+    transactionId?: string;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      console.log('[User API] Creating user in Backend API:', {
+        email: userData.email,
+        convexUserId: userData.convexUserId,
+      });
+
+      // Use workflow trigger API to create user in Backend
+      // This is the proper way - not a hack!
+      const response = await apiFetch<{
+        success: boolean;
+        contactId?: string;
+        frontendUserId?: string;
+        transactionId?: string;
+        message?: string;
+        workflowId?: string;
+        behaviorResults?: Array<{
+          behaviorType: string;
+          success: boolean;
+          message: string;
+          data?: Record<string, unknown>;
+        }>;
+      }>('/workflows/trigger', {
+        method: 'POST',
+        body: JSON.stringify({
+          trigger: 'user_registration',
+          inputData: {
+            eventType: 'account_created',
+            source: 'haffnet_website',
+
+            // User data for CRM contact creation
+            customerData: {
+              email: userData.email,
+              firstName: userData.firstName,
+              lastName: userData.lastName,
+              phone: userData.phone,
+            },
+
+            // Link to Convex auth user ID
+            metadata: {
+              convexUserId: userData.convexUserId,
+              registrationDate: new Date().toISOString(),
+              platform: 'web',
+              authProvider: 'email', // Could be 'google', 'github', etc.
+            },
+          },
+        }),
+      });
+
+      if (response.success) {
+        console.log('[User API] User created in Backend:', {
+          frontendUserId: response.frontendUserId,
+          crmContactId: response.contactId,
+          transactionId: response.transactionId,
+          workflowId: response.workflowId,
+        });
+
+        // Log behavior results for debugging
+        if (response.behaviorResults) {
+          response.behaviorResults.forEach((result) => {
+            console.log(`[User API] Behavior: ${result.behaviorType}`, {
+              success: result.success,
+              message: result.message,
+            });
+          });
+        }
+
+        return {
+          success: true,
+          frontendUserId: response.frontendUserId,
+          crmContactId: response.contactId,
+          transactionId: response.transactionId,
+          message: response.message || 'User created successfully',
+        };
+      }
+
+      // Workflow execution failed
+      return {
+        success: false,
+        error: response.message || 'Backend workflow failed',
+        message: 'Failed to create user in Backend API',
+      };
+
+    } catch (error) {
+      console.error('[User API] Registration failed:', error);
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        message: 'Failed to create user in Backend API',
+      };
+    }
+  },
+};
+
+/**
  * TypeScript Types
  */
 
@@ -428,6 +619,7 @@ export interface Event {
   description?: string;
   subtype: string;
   status: string;
+  organizationId?: string; // Organization that owns this event
 
   // Top-level properties from flattened API response
   startDate?: number;
@@ -435,6 +627,8 @@ export interface Event {
   location?: string;
   capacity?: number; // Max capacity from backend
   registrations?: number; // Current registrations count
+  registrationFormId?: string; // Form ID for registration
+  checkoutInstanceId?: string; // Checkout instance ID from backend
   agenda?: Array<{
     time?: string;
     title?: string;
@@ -526,8 +720,9 @@ export interface Form {
   name: string;
   description: string;
   status: string;
+  organizationId?: string; // Organization that owns this form
   customProperties: {
-    eventId: string;
+    eventId?: string; // Optional - only for event-related forms
     formSchema: {
       version: string;
       fields: FormField[];
@@ -684,6 +879,9 @@ export interface RegistrationResponse {
     invoiceNumber?: string;
     billingMethod: 'employer_invoice' | 'customer_payment' | 'free';
     confirmationEmailSent: boolean;
+    // User account created by backend
+    frontendUserId?: string;
+    isGuestRegistration?: boolean;
     // Legacy fields for backward compatibility
     eventId?: string;
     eventName?: string;
