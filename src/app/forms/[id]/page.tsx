@@ -632,11 +632,19 @@ function SectionBySectionRenderer({
               }`}
               style={{ marginBottom: isVisible ? undefined : 0 }}
             >
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {field.label}
-                {field.required && ' *'}
-              </label>
-              {renderField(field, formData, setFormData)}
+              {field.type === 'text_block' ? (
+                // Render text block directly without label
+                renderField(field, formData, setFormData)
+              ) : (
+                // Render input fields with label
+                <>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {field.label}
+                    {field.required && ' *'}
+                  </label>
+                  {renderField(field, formData, setFormData)}
+                </>
+              )}
             </div>
           );
         })}
