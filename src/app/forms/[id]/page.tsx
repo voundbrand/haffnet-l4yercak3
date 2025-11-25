@@ -189,17 +189,21 @@ function SingleQuestionWizard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Flatten all questions from all sections (exclude text_block)
+  // Flatten all questions/steps from all sections
+  // Include text_blocks that have showAsStep: true (e.g., intro messages)
   const allQuestions = useMemo(() => {
     const sections = schema.sections || [];
     return sections.flatMap((section: any) =>
-      section.fields.filter((field: FormField) => field.type !== 'text_block')
+      section.fields.filter((field: FormField) =>
+        field.type !== 'text_block' || field.showAsStep === true
+      )
     );
   }, [schema]);
 
   const currentQuestion = allQuestions[currentIndex];
   const isFirstQuestion = currentIndex === 0;
   const isLastQuestion = currentIndex === allQuestions.length - 1;
+  const isTextBlock = currentQuestion?.type === 'text_block';
 
   // Helper function to evaluate conditional logic
   const evaluateCondition = (field: FormField): boolean => {
@@ -263,7 +267,9 @@ function SingleQuestionWizard({
   };
 
   // Validate current question before allowing navigation
+  // Text blocks don't require validation
   const canProceed = () => {
+    if (isTextBlock) return true; // Always allow proceeding from text blocks
     if (!currentQuestion.required) return true;
     const value = formData[currentQuestion.id];
 
@@ -370,7 +376,9 @@ function SingleQuestionWizard({
       {schema.settings?.showProgressBar && (
         <div className="mb-8">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Frage {currentIndex + 1} von {allQuestions.length}</span>
+            <span>
+              {isTextBlock ? 'Willkommen' : `Frage ${currentIndex + 1} von ${allQuestions.length}`}
+            </span>
             <span>{Math.round(((currentIndex + 1) / allQuestions.length) * 100)}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -382,13 +390,21 @@ function SingleQuestionWizard({
         </div>
       )}
 
-      {/* Current question */}
+      {/* Current step (question or text block) */}
       <div className="question-container bg-white rounded-lg shadow-md p-6 mb-6 animate-fadeInSlide">
-        <label className="block text-lg font-medium text-gray-900 mb-4">
-          {currentQuestion.label}
-          {currentQuestion.required && <span className="text-red-600 ml-1">*</span>}
-        </label>
-        {renderField(currentQuestion, formData, setFormData)}
+        {isTextBlock ? (
+          // Render text block content as its own step
+          renderField(currentQuestion, formData, setFormData)
+        ) : (
+          // Render form field with label
+          <>
+            <label className="block text-lg font-medium text-gray-900 mb-4">
+              {currentQuestion.label}
+              {currentQuestion.required && <span className="text-red-600 ml-1">*</span>}
+            </label>
+            {renderField(currentQuestion, formData, setFormData)}
+          </>
+        )}
       </div>
 
       {/* Error Message */}
@@ -416,7 +432,7 @@ function SingleQuestionWizard({
             disabled={!canProceed()}
             className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            Weiter →
+            {isTextBlock ? 'Umfrage beginnen →' : 'Weiter →'}
           </button>
         ) : (
           <button

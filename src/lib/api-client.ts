@@ -770,6 +770,7 @@ export interface FormField {
   };
   // text_block specific properties
   content?: string; // HTML content for text_block fields
+  showAsStep?: boolean; // If true, text_block will be shown as its own step in wizard mode (e.g., welcome messages)
   formatting?: {
     alignment?: string;
     padding?: string;
