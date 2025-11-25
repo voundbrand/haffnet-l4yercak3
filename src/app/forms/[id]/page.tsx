@@ -330,11 +330,18 @@ export default function FormPage({ params }: FormPageProps) {
       }
 
       case 'text_block':
-        // Static text/heading - no input needed
+        // Static text/heading - renders HTML content with styling
+        const paddingClass = field.formatting?.padding === 'medium' ? 'p-4' : 'p-2';
+        const alignmentClass = field.formatting?.alignment === 'left' ? 'text-left' : 'text-center';
+        const styleClass = field.formatting?.style === 'info'
+          ? 'bg-blue-50 border border-blue-200 rounded-lg'
+          : '';
+
         return (
-          <div className="text-gray-700 leading-relaxed">
-            {field.label}
-          </div>
+          <div
+            className={`text-gray-700 leading-relaxed ${paddingClass} ${alignmentClass} ${styleClass}`}
+            dangerouslySetInnerHTML={{ __html: field.content || field.label }}
+          />
         );
 
       default:

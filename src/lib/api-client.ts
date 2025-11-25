@@ -753,6 +753,21 @@ export interface FormField {
       value: string[];
     };
   };
+  // text_block specific properties
+  content?: string; // HTML content for text_block fields
+  formatting?: {
+    alignment?: string;
+    padding?: string;
+    style?: string;
+  };
+  helpText?: string; // Help text for fields
+  placeholder?: string; // Placeholder text
+  metadata?: Record<string, unknown>; // Additional metadata
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+  };
 }
 
 export interface RegistrationInput {
