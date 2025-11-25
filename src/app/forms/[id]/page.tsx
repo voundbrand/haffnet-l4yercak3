@@ -96,6 +96,52 @@ export default function FormPage({ params }: FormPageProps) {
     loadForm();
   }, [id]);
 
+  // Helper function to evaluate conditional logic
+  const evaluateCondition = (field: FormField): boolean => {
+    if (!field.conditionalLogic) return true; // No condition = always show
+
+    const logic = field.conditionalLogic;
+
+    // New format: show_if
+    if (logic.show_if) {
+      const { field: dependentField, operator, value } = logic.show_if;
+      const fieldValue = formData[dependentField];
+
+      switch (operator) {
+        case 'equals':
+          return fieldValue === value;
+        case 'not_equals':
+          return fieldValue !== value;
+        case 'contains':
+          return Array.isArray(fieldValue) && fieldValue.includes(value as string);
+        case 'not_contains':
+          return Array.isArray(fieldValue) && !fieldValue.includes(value as string);
+        case 'greater_than':
+          return typeof fieldValue === 'number' && fieldValue > (value as number);
+        case 'less_than':
+          return typeof fieldValue === 'number' && fieldValue < (value as number);
+        case 'is_empty':
+          return !fieldValue || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length === 0);
+        case 'is_not_empty':
+          return Boolean(fieldValue && fieldValue !== '' && (!Array.isArray(fieldValue) || fieldValue.length > 0));
+        default:
+          return true;
+      }
+    }
+
+    // Old format: show (backward compatibility)
+    if (logic.show) {
+      const condition = logic.show;
+      const dependentValue = formData[condition.field];
+
+      if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
+        return false; // Hide field
+      }
+    }
+
+    return true; // Show by default
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +162,11 @@ export default function FormPage({ params }: FormPageProps) {
     }
 
     for (const field of allFields) {
+      // Skip validation for hidden fields (conditional logic)
+      if (!evaluateCondition(field)) {
+        continue;
+      }
+
       if (field.required) {
         const value = formData[field.id];
 
@@ -423,14 +474,9 @@ export default function FormPage({ params }: FormPageProps) {
 
                 {/* Section Fields */}
                 {section.fields.map((field) => {
-                  // Check conditional logic
-                  if (field.conditionalLogic) {
-                    const condition = field.conditionalLogic.show;
-                    const dependentValue = formData[condition.field];
-
-                    if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
-                      return null; // Hide field
-                    }
+                  // Check conditional logic - hide if condition not met
+                  if (!evaluateCondition(field)) {
+                    return null;
                   }
 
                   return (
@@ -448,14 +494,9 @@ export default function FormPage({ params }: FormPageProps) {
           ) : (
             /* Fallback: Render direct fields array (old format) */
             schema.fields && Array.isArray(schema.fields) && schema.fields.map((field) => {
-              // Check conditional logic
-              if (field.conditionalLogic) {
-                const condition = field.conditionalLogic.show;
-                const dependentValue = formData[condition.field];
-
-                if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
-                  return null; // Hide field
-                }
+              // Check conditional logic - hide if condition not met
+              if (!evaluateCondition(field)) {
+                return null;
               }
 
               return (

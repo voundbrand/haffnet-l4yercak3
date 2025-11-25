@@ -747,11 +747,25 @@ export interface FormField {
   min?: number;
   max?: number;
   conditionalLogic?: {
-    show: {
+    // New format: show_if
+    show_if?: {
+      field: string;
+      operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+      value: string | number | boolean;
+    };
+    // Old format: show (for backward compatibility)
+    show?: {
       field: string;
       operator: string;
       value: string[];
     };
+    // Future: Multiple conditions
+    conditions?: Array<{
+      field: string;
+      operator: string;
+      value: string | number | boolean;
+    }>;
+    operator?: 'AND' | 'OR';
   };
   // text_block specific properties
   content?: string; // HTML content for text_block fields
