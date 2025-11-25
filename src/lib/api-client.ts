@@ -163,10 +163,12 @@ export const formApi = {
   },
 
   /**
-   * Submit form response via workflow trigger
+   * Submit form response via public submission endpoint
    *
-   * Uses the same workflow trigger API pattern as event registration.
-   * The backend determines which workflow to run based on the form type.
+   * Uses the backend's public form submission API which includes:
+   * - Rate limiting (5 submissions/hour per IP)
+   * - Honeypot spam protection (bot_trap field)
+   * - Published forms only validation
    */
   async submitForm(data: {
     formId: string;
@@ -179,33 +181,24 @@ export const formApi = {
         responseCount: Object.keys(data.responses).length,
       });
 
-      // Use workflow trigger API with form-specific trigger
+      // Use public submission endpoint with honeypot protection
       const response = await apiFetch<{
         success: boolean;
+        responseId?: string;
         message?: string;
-        data?: {
-          submissionId: string;
-          formId: string;
-          submittedAt: string;
-        };
-      }>('/workflows/trigger', {
+      }>(`/forms/public/${data.formId}/submit`, {
         method: 'POST',
         body: JSON.stringify({
-          trigger: 'form_submission',
-          inputData: {
-            formId: data.formId,
-            formResponses: data.responses,
-            metadata: {
-              ...data.metadata,
-              submittedAt: new Date().toISOString(),
-              source: 'website',
-            },
-          },
+          responses: data.responses,
+          bot_trap: '', // Honeypot field - must be empty for legitimate submissions
         }),
       });
 
       if (response.success) {
-        console.log('[Form API] Form submitted successfully:', response.data);
+        console.log('[Form API] Form submitted successfully:', {
+          responseId: response.responseId,
+          message: response.message,
+        });
         return response;
       }
 

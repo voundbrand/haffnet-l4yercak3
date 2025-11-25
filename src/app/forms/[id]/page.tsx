@@ -442,6 +442,23 @@ export default function FormPage({ params }: FormPageProps) {
             </div>
           )}
 
+          {/* Honeypot field - invisible to users, catches bots */}
+          <input
+            type="text"
+            name="bot_trap"
+            value=""
+            onChange={() => {}}
+            style={{
+              position: 'absolute',
+              left: '-9999px',
+              width: '1px',
+              height: '1px',
+            }}
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+          />
+
           {/* Submit Button */}
           <button
             type="submit"
