@@ -123,3 +123,19 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Form wizard animations */
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fadeInSlide {
+  animation: fadeInSlide 0.3s ease-in-out;
+}

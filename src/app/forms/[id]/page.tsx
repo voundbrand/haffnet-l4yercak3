@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formApi, type Form, type FormField } from '@/lib/api-client';
@@ -20,7 +20,6 @@ export default function FormPage({ params }: FormPageProps) {
 
   const [form, setForm] = useState<Form | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Dynamic form data based on schema
@@ -96,62 +95,668 @@ export default function FormPage({ params }: FormPageProps) {
     loadForm();
   }, [id]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Lädt...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !form) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <Link href="/" className="text-green-600 hover:text-green-700">
+            Zurück zur Startseite
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!form) return null;
+
+  const schema = form.customProperties.formSchema;
+  const displayMode = schema.settings?.displayMode || 'all';
+
+  // Route to appropriate renderer based on display mode
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
+      <div className="container mx-auto px-4 max-w-3xl">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{form.name}</h1>
+          {form.description && <p className="text-gray-600">{form.description}</p>}
+        </div>
+
+        {displayMode === 'single-question' ? (
+          <SingleQuestionWizard
+            formId={id}
+            form={form}
+            schema={schema}
+            formData={formData}
+            setFormData={setFormData}
+            router={router}
+          />
+        ) : displayMode === 'section-by-section' ? (
+          <SectionBySectionRenderer
+            formId={id}
+            form={form}
+            schema={schema}
+            formData={formData}
+            setFormData={setFormData}
+            router={router}
+          />
+        ) : (
+          <TraditionalFormRenderer
+            formId={id}
+            form={form}
+            schema={schema}
+            formData={formData}
+            setFormData={setFormData}
+            router={router}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Single Question Wizard - One question at a time
+ */
+function SingleQuestionWizard({
+  formId,
+  form,
+  schema,
+  formData,
+  setFormData,
+  router,
+}: {
+  formId: string;
+  form: Form;
+  schema: any;
+  formData: Record<string, unknown>;
+  setFormData: (data: Record<string, unknown>) => void;
+  router: any;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Flatten all questions from all sections (exclude text_block)
+  const allQuestions = useMemo(() => {
+    const sections = schema.sections || [];
+    return sections.flatMap((section: any) =>
+      section.fields.filter((field: FormField) => field.type !== 'text_block')
+    );
+  }, [schema]);
+
+  const currentQuestion = allQuestions[currentIndex];
+  const isFirstQuestion = currentIndex === 0;
+  const isLastQuestion = currentIndex === allQuestions.length - 1;
+
   // Helper function to evaluate conditional logic
   const evaluateCondition = (field: FormField): boolean => {
-    if (!field.conditionalLogic) return true; // No condition = always show
+    if (!field.conditionalLogic?.show_if) return true;
 
-    const logic = field.conditionalLogic;
+    const condition = field.conditionalLogic.show_if;
+    const dependentValue = formData[condition.field];
 
-    // New format: show_if
-    if (logic.show_if) {
-      const { field: dependentField, operator, value } = logic.show_if;
-      const fieldValue = formData[dependentField];
-
-      switch (operator) {
-        case 'equals':
-          return fieldValue === value;
-        case 'not_equals':
-          return fieldValue !== value;
-        case 'contains':
-          return Array.isArray(fieldValue) && fieldValue.includes(value as string);
-        case 'not_contains':
-          return Array.isArray(fieldValue) && !fieldValue.includes(value as string);
-        case 'greater_than':
-          return typeof fieldValue === 'number' && fieldValue > (value as number);
-        case 'less_than':
-          return typeof fieldValue === 'number' && fieldValue < (value as number);
-        case 'is_empty':
-          return !fieldValue || fieldValue === '' || (Array.isArray(fieldValue) && fieldValue.length === 0);
-        case 'is_not_empty':
-          return Boolean(fieldValue && fieldValue !== '' && (!Array.isArray(fieldValue) || fieldValue.length > 0));
-        default:
-          return true;
-      }
+    switch (condition.operator) {
+      case 'equals':
+        return dependentValue === condition.value;
+      case 'not_equals':
+        return dependentValue !== condition.value;
+      case 'contains':
+        return String(dependentValue || '').includes(String(condition.value));
+      case 'not_contains':
+        return !String(dependentValue || '').includes(String(condition.value));
+      case 'greater_than':
+        return Number(dependentValue) > Number(condition.value);
+      case 'less_than':
+        return Number(dependentValue) < Number(condition.value);
+      default:
+        return true;
     }
-
-    // Old format: show (backward compatibility)
-    if (logic.show) {
-      const condition = logic.show;
-      const dependentValue = formData[condition.field];
-
-      if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
-        return false; // Hide field
-      }
-    }
-
-    return true; // Show by default
   };
+
+  // Clear hidden field values when conditions change
+  useEffect(() => {
+    const newFormData = { ...formData };
+    let hasChanges = false;
+
+    allQuestions.forEach((field: FormField) => {
+      if (!evaluateCondition(field) && newFormData[field.id] !== undefined) {
+        delete newFormData[field.id];
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      setFormData(newFormData);
+    }
+  }, [formData, allQuestions, evaluateCondition, setFormData]);
+
+  // Skip to next visible question
+  const findNextVisibleIndex = (fromIndex: number): number => {
+    for (let i = fromIndex + 1; i < allQuestions.length; i++) {
+      if (evaluateCondition(allQuestions[i])) {
+        return i;
+      }
+    }
+    return fromIndex;
+  };
+
+  const findPrevVisibleIndex = (fromIndex: number): number => {
+    for (let i = fromIndex - 1; i >= 0; i--) {
+      if (evaluateCondition(allQuestions[i])) {
+        return i;
+      }
+    }
+    return fromIndex;
+  };
+
+  // Validate current question before allowing navigation
+  const canProceed = () => {
+    if (!currentQuestion.required) return true;
+    const value = formData[currentQuestion.id];
+
+    if (currentQuestion.type === 'checkbox') {
+      return Array.isArray(value) && value.length > 0;
+    }
+    if (currentQuestion.type === 'nps') {
+      return value !== -1;
+    }
+    if (currentQuestion.type === 'rating') {
+      return value !== 0;
+    }
+    return value !== undefined && value !== '';
+  };
+
+  const handleNext = () => {
+    if (!canProceed()) {
+      setError('Bitte beantworten Sie diese Frage, bevor Sie fortfahren');
+      return;
+    }
+    setError(null);
+
+    const nextIndex = findNextVisibleIndex(currentIndex);
+    if (nextIndex !== currentIndex) {
+      setCurrentIndex(nextIndex);
+    }
+  };
+
+  const handlePrev = () => {
+    setError(null);
+    const prevIndex = findPrevVisibleIndex(currentIndex);
+    if (prevIndex !== currentIndex) {
+      setCurrentIndex(prevIndex);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!canProceed()) {
+      setError('Bitte beantworten Sie diese Frage, bevor Sie absenden');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await formApi.submitForm({
+        formId,
+        responses: formData,
+        metadata: {
+          source: 'website',
+          userAgent: navigator.userAgent,
+        },
+      });
+
+      router.push(`/forms/${formId}/danke`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fehler beim Absenden');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && canProceed()) {
+        if (!isLastQuestion) {
+          handleNext();
+        }
+      }
+      if (e.key === 'ArrowLeft' && !isFirstQuestion) {
+        handlePrev();
+      }
+      if (e.key === 'ArrowRight' && !isLastQuestion && canProceed()) {
+        handleNext();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, formData]);
+
+  // Skip to first visible question on mount
+  useEffect(() => {
+    if (currentQuestion && !evaluateCondition(currentQuestion)) {
+      const nextVisible = findNextVisibleIndex(currentIndex);
+      if (nextVisible !== currentIndex) {
+        setCurrentIndex(nextVisible);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Don't render if current question is hidden
+  if (!evaluateCondition(currentQuestion)) {
+    return null;
+  }
+
+  return (
+    <div className="wizard-container">
+      {/* Progress indicator */}
+      {schema.settings?.showProgressBar && (
+        <div className="mb-8">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>Frage {currentIndex + 1} von {allQuestions.length}</span>
+            <span>{Math.round(((currentIndex + 1) / allQuestions.length) * 100)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-green-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentIndex + 1) / allQuestions.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Current question */}
+      <div className="question-container bg-white rounded-lg shadow-md p-6 mb-6 animate-fadeInSlide">
+        <label className="block text-lg font-medium text-gray-900 mb-4">
+          {currentQuestion.label}
+          {currentQuestion.required && <span className="text-red-600 ml-1">*</span>}
+        </label>
+        {renderField(currentQuestion, formData, setFormData)}
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Navigation buttons */}
+      <div className="flex justify-between items-center gap-4">
+        <button
+          type="button"
+          onClick={handlePrev}
+          disabled={isFirstQuestion}
+          className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          ← Zurück
+        </button>
+
+        {!isLastQuestion ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!canProceed()}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Weiter →
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canProceed() || submitting}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {submitting ? 'Wird gesendet...' : schema.settings?.submitButtonText || 'Absenden'}
+          </button>
+        )}
+      </div>
+
+      {/* Honeypot field */}
+      <input
+        type="text"
+        name="bot_trap"
+        value=""
+        onChange={() => {}}
+        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
+/**
+ * Section-by-Section Renderer - One section at a time
+ */
+function SectionBySectionRenderer({
+  formId,
+  form,
+  schema,
+  formData,
+  setFormData,
+  router,
+}: {
+  formId: string;
+  form: Form;
+  schema: any;
+  formData: Record<string, unknown>;
+  setFormData: (data: Record<string, unknown>) => void;
+  router: any;
+}) {
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const sections = schema.sections || [];
+  const currentSection = sections[currentSectionIndex];
+  const isFirstSection = currentSectionIndex === 0;
+  const isLastSection = currentSectionIndex === sections.length - 1;
+
+  // Helper function to evaluate conditional logic
+  const evaluateCondition = (field: FormField): boolean => {
+    if (!field.conditionalLogic?.show_if) return true;
+
+    const condition = field.conditionalLogic.show_if;
+    const dependentValue = formData[condition.field];
+
+    switch (condition.operator) {
+      case 'equals':
+        return dependentValue === condition.value;
+      case 'not_equals':
+        return dependentValue !== condition.value;
+      case 'contains':
+        return String(dependentValue || '').includes(String(condition.value));
+      case 'not_contains':
+        return !String(dependentValue || '').includes(String(condition.value));
+      case 'greater_than':
+        return Number(dependentValue) > Number(condition.value);
+      case 'less_than':
+        return Number(dependentValue) < Number(condition.value);
+      default:
+        return true;
+    }
+  };
+
+  // Clear hidden field values when conditions change
+  useEffect(() => {
+    const newFormData = { ...formData };
+    let hasChanges = false;
+
+    sections.forEach((section: { fields: FormField[] }) => {
+      section.fields.forEach((field: FormField) => {
+        if (!evaluateCondition(field) && newFormData[field.id] !== undefined) {
+          delete newFormData[field.id];
+          hasChanges = true;
+        }
+      });
+    });
+
+    if (hasChanges) {
+      setFormData(newFormData);
+    }
+  }, [formData, sections, evaluateCondition, setFormData]);
+
+  // Validate all required fields in current section
+  const canProceed = () => {
+    return currentSection.fields
+      .filter((f: FormField) => f.required && f.type !== 'text_block' && evaluateCondition(f))
+      .every((field: FormField) => {
+        const value = formData[field.id];
+
+        if (field.type === 'checkbox') {
+          return Array.isArray(value) && value.length > 0;
+        }
+        if (field.type === 'nps') {
+          return value !== -1;
+        }
+        if (field.type === 'rating') {
+          return value !== 0;
+        }
+        return value !== undefined && value !== '';
+      });
+  };
+
+  const handleNext = () => {
+    if (!canProceed()) {
+      setError('Bitte füllen Sie alle Pflichtfelder aus');
+      return;
+    }
+    setError(null);
+    setCurrentSectionIndex((i) => i + 1);
+  };
+
+  const handlePrev = () => {
+    setError(null);
+    setCurrentSectionIndex((i) => i - 1);
+  };
+
+  const handleSubmit = async () => {
+    if (!canProceed()) {
+      setError('Bitte füllen Sie alle Pflichtfelder aus');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await formApi.submitForm({
+        formId,
+        responses: formData,
+        metadata: {
+          source: 'website',
+          userAgent: navigator.userAgent,
+        },
+      });
+
+      router.push(`/forms/${formId}/danke`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fehler beim Absenden');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="section-wizard-container">
+      {/* Progress indicator */}
+      {schema.settings?.showProgressBar && (
+        <div className="mb-8">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>
+              Abschnitt {currentSectionIndex + 1} von {sections.length}: {currentSection.title}
+            </span>
+            <span>{Math.round(((currentSectionIndex + 1) / sections.length) * 100)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-green-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentSectionIndex + 1) / sections.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Section header */}
+      <div className="section-header bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">{currentSection.title}</h2>
+        {currentSection.description && <p className="text-gray-600 mt-2">{currentSection.description}</p>}
+      </div>
+
+      {/* All fields in current section */}
+      <div className="section-fields space-y-6 mb-6">
+        {currentSection.fields.map((field: FormField) => {
+          const isVisible = evaluateCondition(field);
+
+          return (
+            <div
+              key={field.id}
+              className={`bg-white rounded-lg shadow-md p-6 transition-all duration-300 ease-in-out ${
+                isVisible ? 'opacity-100 max-h-[2000px]' : 'opacity-0 max-h-0 overflow-hidden p-0 mb-0'
+              }`}
+              style={{ marginBottom: isVisible ? undefined : 0 }}
+            >
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {field.label}
+                {field.required && ' *'}
+              </label>
+              {renderField(field, formData, setFormData)}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex justify-between items-center gap-4">
+        <button
+          type="button"
+          onClick={handlePrev}
+          disabled={isFirstSection}
+          className="px-6 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          ← Vorheriger Abschnitt
+        </button>
+
+        {!isLastSection ? (
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!canProceed()}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Nächster Abschnitt →
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canProceed() || submitting}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {submitting ? 'Wird gesendet...' : schema.settings?.submitButtonText || 'Absenden'}
+          </button>
+        )}
+      </div>
+
+      {/* Honeypot field */}
+      <input
+        type="text"
+        name="bot_trap"
+        value=""
+        onChange={() => {}}
+        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
+/**
+ * Traditional Form Renderer - All questions on one page (existing implementation)
+ */
+function TraditionalFormRenderer({
+  formId,
+  form,
+  schema,
+  formData,
+  setFormData,
+  router,
+}: {
+  formId: string;
+  form: Form;
+  schema: any;
+  formData: Record<string, unknown>;
+  setFormData: (data: Record<string, unknown>) => void;
+  router: any;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Helper function to evaluate conditional logic
+  const evaluateCondition = (field: FormField): boolean => {
+    if (!field.conditionalLogic?.show_if) return true;
+
+    const condition = field.conditionalLogic.show_if;
+    const dependentValue = formData[condition.field];
+
+    switch (condition.operator) {
+      case 'equals':
+        return dependentValue === condition.value;
+      case 'not_equals':
+        return dependentValue !== condition.value;
+      case 'contains':
+        return String(dependentValue || '').includes(String(condition.value));
+      case 'not_contains':
+        return !String(dependentValue || '').includes(String(condition.value));
+      case 'greater_than':
+        return Number(dependentValue) > Number(condition.value);
+      case 'less_than':
+        return Number(dependentValue) < Number(condition.value);
+      default:
+        return true;
+    }
+  };
+
+  // Clear hidden field values when conditions change
+  useEffect(() => {
+    const allFields: FormField[] = [];
+    if (schema.sections && Array.isArray(schema.sections)) {
+      schema.sections.forEach((section: { fields: FormField[] }) => {
+        allFields.push(...section.fields);
+      });
+    } else if (schema.fields && Array.isArray(schema.fields)) {
+      allFields.push(...schema.fields);
+    }
+
+    const newFormData = { ...formData };
+    let hasChanges = false;
+
+    allFields.forEach((field: FormField) => {
+      if (!evaluateCondition(field) && newFormData[field.id] !== undefined) {
+        delete newFormData[field.id];
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      setFormData(newFormData);
+    }
+  }, [formData, schema, evaluateCondition, setFormData]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form) return;
-
     // Validate required fields
-    const schema = form.customProperties.formSchema;
-
-    // Get all fields from sections or direct fields array
     const allFields: FormField[] = [];
     if (schema.sections && Array.isArray(schema.sections)) {
       schema.sections.forEach((section: { fields: FormField[] }) => {
@@ -162,7 +767,7 @@ export default function FormPage({ params }: FormPageProps) {
     }
 
     for (const field of allFields) {
-      // Skip validation for hidden fields (conditional logic)
+      // Skip validation for hidden fields
       if (!evaluateCondition(field)) {
         continue;
       }
@@ -197,7 +802,7 @@ export default function FormPage({ params }: FormPageProps) {
 
     try {
       await formApi.submitForm({
-        formId: id,
+        formId,
         responses: formData,
         metadata: {
           source: 'website',
@@ -205,8 +810,7 @@ export default function FormPage({ params }: FormPageProps) {
         },
       });
 
-      // Redirect to thank you page
-      router.push(`/forms/${id}/danke`);
+      router.push(`/forms/${formId}/danke`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fehler beim Absenden');
     } finally {
@@ -214,363 +818,331 @@ export default function FormPage({ params }: FormPageProps) {
     }
   };
 
-  // Render field based on type
-  const renderField = (field: FormField | MatrixField) => {
-    const value = formData[field.id];
+  return (
+    <>
+      {/* Info Box */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
+        <p className="text-sm text-green-800">
+          <strong>Hinweis:</strong> Felder mit * sind Pflichtfelder
+        </p>
+      </div>
 
-    switch (field.type) {
-      case 'text':
-      case 'email':
-        return (
-          <input
-            type={field.type}
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
-            required={field.required}
-          />
-        );
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Render sections with fields */}
+        {schema.sections && Array.isArray(schema.sections) ? (
+          schema.sections.map((section: { id: string; title: string; description?: string; fields: FormField[] }) => (
+            <div key={section.id} className="space-y-6">
+              {/* Section Header */}
+              <div className="border-b border-gray-200 pb-4">
+                <h2 className="text-2xl font-bold text-gray-900">{section.title}</h2>
+                {section.description && <p className="text-gray-600 mt-2">{section.description}</p>}
+              </div>
 
-      case 'textarea':
-        return (
-          <textarea
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
-            rows={3}
-            required={field.required}
-          />
-        );
+              {/* Section Fields */}
+              {section.fields.map((field: FormField) => {
+                const isVisible = evaluateCondition(field);
 
-      case 'rating':
-        return (
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((rating) => (
+                return (
+                  <div
+                    key={field.id}
+                    className={`bg-white rounded-lg shadow-md p-6 transition-all duration-300 ease-in-out ${
+                      isVisible ? 'opacity-100 max-h-[2000px]' : 'opacity-0 max-h-0 overflow-hidden p-0 mb-0'
+                    }`}
+                    style={{ marginBottom: isVisible ? undefined : 0 }}
+                  >
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {field.label}
+                      {field.required && ' *'}
+                    </label>
+                    {renderField(field, formData, setFormData)}
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        ) : (
+          /* Fallback: Render direct fields array (old format) */
+          schema.fields &&
+          Array.isArray(schema.fields) &&
+          schema.fields.map((field: FormField) => {
+            const isVisible = evaluateCondition(field);
+
+            return (
+              <div
+                key={field.id}
+                className={`bg-white rounded-lg shadow-md p-6 transition-all duration-300 ease-in-out ${
+                  isVisible ? 'opacity-100 max-h-[2000px]' : 'opacity-0 max-h-0 overflow-hidden p-0 mb-0'
+                }`}
+                style={{ marginBottom: isVisible ? undefined : 0 }}
+              >
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {field.label}
+                  {field.required && ' *'}
+                </label>
+                {renderField(field, formData, setFormData)}
+              </div>
+            );
+          })
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
+        {/* Honeypot field */}
+        <input
+          type="text"
+          name="bot_trap"
+          value=""
+          onChange={() => {}}
+          style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+        />
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:cursor-not-allowed"
+        >
+          {submitting ? (
+            <span className="flex items-center justify-center">
+              <svg
+                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              Wird gesendet...
+            </span>
+          ) : (
+            schema.settings.submitButtonText || 'Absenden'
+          )}
+        </button>
+      </form>
+    </>
+  );
+}
+
+/**
+ * Render field based on type - Shared utility function
+ */
+function renderField(field: FormField | MatrixField, formData: Record<string, unknown>, setFormData: (data: Record<string, unknown>) => void) {
+  const value = formData[field.id];
+
+  switch (field.type) {
+    case 'text':
+    case 'email':
+      return (
+        <input
+          type={field.type}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+          required={field.required}
+        />
+      );
+
+    case 'textarea':
+      return (
+        <textarea
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600"
+          rows={3}
+          required={field.required}
+        />
+      );
+
+    case 'rating':
+      return (
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <button
+              key={rating}
+              type="button"
+              onClick={() => setFormData({ ...formData, [field.id]: rating })}
+              className={`w-12 h-12 rounded-lg font-semibold text-sm transition-all ${
+                value === rating
+                  ? 'bg-green-600 text-white ring-2 ring-green-600 ring-offset-2'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {rating}
+            </button>
+          ))}
+        </div>
+      );
+
+    case 'nps':
+      return (
+        <div>
+          <div className="flex justify-between text-xs text-gray-600 mb-2">
+            <span>0 = Überhaupt nicht wahrscheinlich</span>
+            <span>10 = Äußerst wahrscheinlich</span>
+          </div>
+          <div className="grid grid-cols-11 gap-2">
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((score) => (
               <button
-                key={rating}
+                key={score}
                 type="button"
-                onClick={() => setFormData({ ...formData, [field.id]: rating })}
-                className={`w-12 h-12 rounded-lg font-semibold text-sm transition-all ${
-                  value === rating
+                onClick={() => setFormData({ ...formData, [field.id]: score })}
+                className={`h-12 rounded-lg font-semibold text-sm transition-all ${
+                  value === score
                     ? 'bg-green-600 text-white ring-2 ring-green-600 ring-offset-2'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {rating}
+                {score}
               </button>
             ))}
           </div>
-        );
+        </div>
+      );
 
-      case 'nps':
-        return (
-          <div>
-            <div className="flex justify-between text-xs text-gray-600 mb-2">
-              <span>0 = Überhaupt nicht wahrscheinlich</span>
-              <span>10 = Äußerst wahrscheinlich</span>
-            </div>
-            <div className="grid grid-cols-11 gap-2">
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((score) => (
-                <button
-                  key={score}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, [field.id]: score })}
-                  className={`h-12 rounded-lg font-semibold text-sm transition-all ${
-                    value === score
-                      ? 'bg-green-600 text-white ring-2 ring-green-600 ring-offset-2'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {score}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case 'matrix': {
-        const matrixField = field as MatrixField;
-        return (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-2 text-sm font-semibold">Aspekt</th>
+    case 'matrix': {
+      const matrixField = field as MatrixField;
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2 px-2 text-sm font-semibold">Aspekt</th>
+                {matrixField.options?.map((opt) => (
+                  <th key={opt.value} className="text-center py-2 px-2 text-xs">
+                    {opt.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrixField.rows?.map((row) => (
+                <tr key={row.id} className="border-b hover:bg-gray-50">
+                  <td className="py-3 px-2 text-sm">{row.label}</td>
                   {matrixField.options?.map((opt) => (
-                    <th key={opt.value} className="text-center py-2 px-2 text-xs">
-                      {opt.label}
-                    </th>
+                    <td key={opt.value} className="text-center py-3 px-2">
+                      <input
+                        type="radio"
+                        name={row.id}
+                        value={opt.value}
+                        checked={formData[row.id] === Number(opt.value)}
+                        onChange={() => setFormData({ ...formData, [row.id]: Number(opt.value) })}
+                        className="w-5 h-5 accent-green-600 cursor-pointer"
+                        required={matrixField.required}
+                      />
+                    </td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {matrixField.rows?.map((row) => (
-                  <tr key={row.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-2 text-sm">{row.label}</td>
-                    {matrixField.options?.map((opt) => (
-                      <td key={opt.value} className="text-center py-3 px-2">
-                        <input
-                          type="radio"
-                          name={row.id}
-                          value={opt.value}
-                          checked={formData[row.id] === Number(opt.value)}
-                          onChange={() =>
-                            setFormData({ ...formData, [row.id]: Number(opt.value) })
-                          }
-                          className="w-5 h-5 accent-green-600 cursor-pointer"
-                          required={matrixField.required}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      }
-
-      case 'radio':
-        return (
-          <div className="space-y-2">
-            {field.options?.map((option) => (
-              <label
-                key={option.value}
-                className="flex items-center cursor-pointer p-2 hover:bg-gray-50 rounded"
-              >
-                <input
-                  type="radio"
-                  name={field.id}
-                  value={option.value}
-                  checked={value === option.value}
-                  onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
-                  required={field.required}
-                  className="mr-3 w-5 h-5 accent-green-600"
-                />
-                <span className="text-sm text-gray-700">{option.label}</span>
-              </label>
-            ))}
-          </div>
-        );
-
-      case 'checkbox': {
-        const arrayValue = Array.isArray(value) ? (value as string[]) : [];
-        return (
-          <div className="space-y-2">
-            {field.options?.map((option) => (
-              <label
-                key={option.value}
-                className="flex items-center cursor-pointer p-2 hover:bg-gray-50 rounded"
-              >
-                <input
-                  type="checkbox"
-                  checked={arrayValue.includes(option.value)}
-                  onChange={(e) => {
-                    const newValue = e.target.checked
-                      ? [...arrayValue, option.value]
-                      : arrayValue.filter((v) => v !== option.value);
-                    setFormData({ ...formData, [field.id]: newValue });
-                  }}
-                  className="mr-3 w-5 h-5 accent-green-600"
-                />
-                <span className="text-sm text-gray-700">{option.label}</span>
-              </label>
-            ))}
-          </div>
-        );
-      }
-
-      case 'text_block': {
-        // Static text/heading - renders HTML content with styling
-        const paddingClass = field.formatting?.padding === 'medium' ? 'p-4' :
-                            field.formatting?.padding === 'large' ? 'p-6' : 'p-2';
-
-        const alignmentClass = field.formatting?.alignment === 'left' ? 'text-left' :
-                              field.formatting?.alignment === 'right' ? 'text-right' :
-                              field.formatting?.alignment === 'center' ? 'text-center' : 'text-left';
-
-        // Map style types to Tailwind classes
-        const styleMap: Record<string, string> = {
-          'info': 'bg-blue-50 border border-blue-200 rounded-lg',
-          'warning': 'bg-yellow-50 border border-yellow-200 rounded-lg',
-          'success': 'bg-green-50 border border-green-200 rounded-lg',
-          'error': 'bg-red-50 border border-red-200 rounded-lg',
-          'default': 'bg-gray-50 border border-gray-200 rounded-lg',
-        };
-
-        const styleClass = field.formatting?.style
-          ? styleMap[field.formatting.style] || ''
-          : '';
-
-        return (
-          <div
-            className={`text-gray-700 leading-relaxed ${paddingClass} ${alignmentClass} ${styleClass}`}
-            dangerouslySetInnerHTML={{ __html: field.content || field.label }}
-          />
-        );
-      }
-
-      default:
-        return <div className="text-gray-500">Unsupported field type: {field.type}</div>;
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     }
-  };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Lädt...</p>
+    case 'select':
+      return (
+        <select
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-600 bg-white"
+          required={field.required}
+        >
+          <option value="">Bitte wählen...</option>
+          {field.options?.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+
+    case 'radio':
+      return (
+        <div className="space-y-2">
+          {field.options?.map((option) => (
+            <label key={option.value} className="flex items-center cursor-pointer p-2 hover:bg-gray-50 rounded">
+              <input
+                type="radio"
+                name={field.id}
+                value={option.value}
+                checked={value === option.value}
+                onChange={(e) => setFormData({ ...formData, [field.id]: e.target.value })}
+                required={field.required}
+                className="mr-3 w-5 h-5 accent-green-600"
+              />
+              <span className="text-sm text-gray-700">{option.label}</span>
+            </label>
+          ))}
         </div>
-      </div>
-    );
+      );
+
+    case 'checkbox': {
+      const arrayValue = Array.isArray(value) ? (value as string[]) : [];
+      return (
+        <div className="space-y-2">
+          {field.options?.map((option) => (
+            <label key={option.value} className="flex items-center cursor-pointer p-2 hover:bg-gray-50 rounded">
+              <input
+                type="checkbox"
+                checked={arrayValue.includes(option.value)}
+                onChange={(e) => {
+                  const newValue = e.target.checked
+                    ? [...arrayValue, option.value]
+                    : arrayValue.filter((v) => v !== option.value);
+                  setFormData({ ...formData, [field.id]: newValue });
+                }}
+                className="mr-3 w-5 h-5 accent-green-600"
+              />
+              <span className="text-sm text-gray-700">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+
+    case 'text_block': {
+      const paddingClass = field.formatting?.padding === 'medium' ? 'p-4' : field.formatting?.padding === 'large' ? 'p-6' : 'p-2';
+      const alignmentClass =
+        field.formatting?.alignment === 'left'
+          ? 'text-left'
+          : field.formatting?.alignment === 'right'
+            ? 'text-right'
+            : field.formatting?.alignment === 'center'
+              ? 'text-center'
+              : 'text-left';
+
+      const styleMap: Record<string, string> = {
+        info: 'bg-blue-50 border border-blue-200 rounded-lg',
+        warning: 'bg-yellow-50 border border-yellow-200 rounded-lg',
+        success: 'bg-green-50 border border-green-200 rounded-lg',
+        error: 'bg-red-50 border border-red-200 rounded-lg',
+        default: 'bg-gray-50 border border-gray-200 rounded-lg',
+      };
+
+      const styleClass = field.formatting?.style ? styleMap[field.formatting.style] || '' : '';
+
+      return (
+        <div
+          className={`text-gray-700 leading-relaxed ${paddingClass} ${alignmentClass} ${styleClass}`}
+          dangerouslySetInnerHTML={{ __html: field.content || field.label }}
+        />
+      );
+    }
+
+    default:
+      return <div className="text-gray-500">Unsupported field type: {field.type}</div>;
   }
-
-  if (error && !form) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Link href="/" className="text-green-600 hover:text-green-700">
-            Zurück zur Startseite
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (!form) return null;
-
-  const schema = form.customProperties.formSchema;
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
-      <div className="container mx-auto px-4 max-w-3xl">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{form.name}</h1>
-          {form.description && <p className="text-gray-600">{form.description}</p>}
-        </div>
-
-        {/* Info Box */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
-          <p className="text-sm text-green-800">
-            <strong>Hinweis:</strong> Felder mit * sind Pflichtfelder
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Render sections with fields (new format) */}
-          {schema.sections && Array.isArray(schema.sections) ? (
-            schema.sections.map((section: { id: string; title: string; description?: string; fields: FormField[] }) => (
-              <div key={section.id} className="space-y-6">
-                {/* Section Header */}
-                <div className="border-b border-gray-200 pb-4">
-                  <h2 className="text-2xl font-bold text-gray-900">{section.title}</h2>
-                  {section.description && (
-                    <p className="text-gray-600 mt-2">{section.description}</p>
-                  )}
-                </div>
-
-                {/* Section Fields */}
-                {section.fields.map((field) => {
-                  // Check conditional logic - hide if condition not met
-                  if (!evaluateCondition(field)) {
-                    return null;
-                  }
-
-                  return (
-                    <div key={field.id} className="bg-white rounded-lg shadow-md p-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {field.label}
-                        {field.required && ' *'}
-                      </label>
-                      {renderField(field)}
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          ) : (
-            /* Fallback: Render direct fields array (old format) */
-            schema.fields && Array.isArray(schema.fields) && schema.fields.map((field) => {
-              // Check conditional logic - hide if condition not met
-              if (!evaluateCondition(field)) {
-                return null;
-              }
-
-              return (
-                <div key={field.id} className="bg-white rounded-lg shadow-md p-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {field.label}
-                    {field.required && ' *'}
-                  </label>
-                  {renderField(field)}
-                </div>
-              );
-            })
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800">{error}</p>
-            </div>
-          )}
-
-          {/* Honeypot field - invisible to users, catches bots */}
-          <input
-            type="text"
-            name="bot_trap"
-            value=""
-            onChange={() => {}}
-            style={{
-              position: 'absolute',
-              left: '-9999px',
-              width: '1px',
-              height: '1px',
-            }}
-            tabIndex={-1}
-            autoComplete="off"
-            aria-hidden="true"
-          />
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:cursor-not-allowed"
-          >
-            {submitting ? (
-              <span className="flex items-center justify-center">
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Wird gesendet...
-              </span>
-            ) : (
-              schema.settings.submitButtonText || 'Absenden'
-            )}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
 }

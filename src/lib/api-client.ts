@@ -733,6 +733,7 @@ export interface Form {
         submitButtonText: string;
         successMessage: string;
         redirectUrl: string | null;
+        displayMode?: 'all' | 'single-question' | 'section-by-section' | 'paginated';
       };
     };
   };

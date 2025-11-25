@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HaffNet Konferenz Feedback-Umfrage</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #019e43 0%, #017a35 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #019e43 0%, #017a35 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .form-container {
+            padding: 40px;
+        }
+
+        .intro {
+            background: #f0fff4;
+            border: 1px solid #48bb78;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            font-size: 15px;
+            color: #22543d;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid #019e43;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            font-weight: 500;
+            color: #4a5568;
+            margin-bottom: 10px;
+            display: block;
+            font-size: 14px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #019e43;
+            box-shadow: 0 0 0 3px rgba(1, 158, 67, 0.1);
+        }
+
+        .radio-group, .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .radio-item, .checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            border: 1px solid #e2e8f0;
+        }
+
+        .radio-item:hover, .checkbox-item:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .radio-item input[type="radio"],
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            margin-top: 2px;
+        }
+
+        .radio-item label, .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        /* Rating Scale (Likert Scale) */
+        .rating-scale {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .rating-option {
+            flex: 1;
+            text-align: center;
+        }
+
+        .rating-option input[type="radio"] {
+            width: auto;
+            margin-bottom: 5px;
+        }
+
+        .rating-option label {
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        /* NPS Scale (0-10) */
+        .nps-scale {
+            display: flex;
+            justify-content: space-between;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .nps-option {
+            flex: 1;
+            text-align: center;
+        }
+
+        .nps-option input[type="radio"] {
+            width: 100%;
+            height: 40px;
+            margin: 0;
+        }
+
+        .nps-option label {
+            display: block;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .scale-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #718096;
+        }
+
+        /* Matrix Question */
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .matrix-table th,
+        .matrix-table td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .matrix-table th {
+            background: #f7fafc;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .matrix-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+            background: #f7fafc;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #019e43 0%, #017a35 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            width: 100%;
+            margin-top: 30px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(1, 158, 67, 0.3);
+        }
+
+        .note {
+            background: #fef5e7;
+            border: 1px solid #f6e05e;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 14px;
+            color: #744210;
+        }
+
+        @media (max-width: 768px) {
+            .form-container {
+                padding: 20px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .rating-scale {
+                flex-direction: column;
+            }
+
+            .nps-scale {
+                flex-wrap: wrap;
+            }
+
+            .nps-option {
+                flex: 0 0 calc(20% - 5px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>HaffNet Konferenz Feedback-Umfrage</h1>
+            <p>November 2025 • Ihre Meinung zählt!</p>
+        </div>
+
+        <div class="form-container">
+            <div class="intro">
+                <strong>Sehr geehrte Mitglieder und Partner,</strong><br><br>
+                vielen Dank für Ihre Teilnahme an unserer Konferenz. Ihre Meinung ist uns sehr wichtig!
+                Bitte nehmen Sie sich ein paar Minuten Zeit, um uns Feedback zu geben.
+                Ihre Antworten helfen uns, zukünftige Veranstaltungen noch besser zu gestalten.
+            </div>
+
+            <form id="feedbackForm" onsubmit="handleSubmit(event)">
+
+                <!-- Overall Satisfaction -->
+                <div class="section">
+                    <h2 class="section-title">1. Gesamtzufriedenheit</h2>
+
+                    <div class="form-group">
+                        <label>Wie zufrieden waren Sie insgesamt mit der Veranstaltung? *</label>
+                        <div class="rating-scale">
+                            <div class="rating-option">
+                                <input type="radio" id="overall_1" name="overall_satisfaction" value="1" required>
+                                <label for="overall_1">1<br>Sehr unzufrieden</label>
+                            </div>
+                            <div class="rating-option">
+                                <input type="radio" id="overall_2" name="overall_satisfaction" value="2">
+                                <label for="overall_2">2</label>
+                            </div>
+                            <div class="rating-option">
+                                <input type="radio" id="overall_3" name="overall_satisfaction" value="3">
+                                <label for="overall_3">3</label>
+                            </div>
+                            <div class="rating-option">
+                                <input type="radio" id="overall_4" name="overall_satisfaction" value="4">
+                                <label for="overall_4">4</label>
+                            </div>
+                            <div class="rating-option">
+                                <input type="radio" id="overall_5" name="overall_satisfaction" value="5">
+                                <label for="overall_5">5<br>Sehr zufrieden</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Würden Sie diese Veranstaltung weiterempfehlen? (NPS Score 0-10) *</label>
+                        <div class="scale-labels">
+                            <span>0 = Überhaupt nicht wahrscheinlich</span>
+                            <span>10 = Äußerst wahrscheinlich</span>
+                        </div>
+                        <div class="nps-scale">
+                            <div class="nps-option">
+                                <input type="radio" id="nps_0" name="nps_score" value="0" required>
+                                <label for="nps_0">0</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_1" name="nps_score" value="1">
+                                <label for="nps_1">1</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_2" name="nps_score" value="2">
+                                <label for="nps_2">2</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_3" name="nps_score" value="3">
+                                <label for="nps_3">3</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_4" name="nps_score" value="4">
+                                <label for="nps_4">4</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_5" name="nps_score" value="5">
+                                <label for="nps_5">5</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_6" name="nps_score" value="6">
+                                <label for="nps_6">6</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_7" name="nps_score" value="7">
+                                <label for="nps_7">7</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_8" name="nps_score" value="8">
+                                <label for="nps_8">8</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_9" name="nps_score" value="9">
+                                <label for="nps_9">9</label>
+                            </div>
+                            <div class="nps-option">
+                                <input type="radio" id="nps_10" name="nps_score" value="10">
+                                <label for="nps_10">10</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Quality -->
+                <div class="section">
+                    <h2 class="section-title">2. Inhalte und Programm</h2>
+
+                    <div class="form-group">
+                        <label>Bitte bewerten Sie die folgenden Aspekte des Programms: *</label>
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Aspekt</th>
+                                    <th>Sehr schlecht</th>
+                                    <th>Schlecht</th>
+                                    <th>Befriedigend</th>
+                                    <th>Gut</th>
+                                    <th>Sehr gut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Qualität der Vorträge</td>
+                                    <td><input type="radio" name="content_presentations" value="1" required></td>
+                                    <td><input type="radio" name="content_presentations" value="2"></td>
+                                    <td><input type="radio" name="content_presentations" value="3"></td>
+                                    <td><input type="radio" name="content_presentations" value="4"></td>
+                                    <td><input type="radio" name="content_presentations" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Relevanz der Themen</td>
+                                    <td><input type="radio" name="content_relevance" value="1" required></td>
+                                    <td><input type="radio" name="content_relevance" value="2"></td>
+                                    <td><input type="radio" name="content_relevance" value="3"></td>
+                                    <td><input type="radio" name="content_relevance" value="4"></td>
+                                    <td><input type="radio" name="content_relevance" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Kompetenz der Referenten</td>
+                                    <td><input type="radio" name="content_speakers" value="1" required></td>
+                                    <td><input type="radio" name="content_speakers" value="2"></td>
+                                    <td><input type="radio" name="content_speakers" value="3"></td>
+                                    <td><input type="radio" name="content_speakers" value="4"></td>
+                                    <td><input type="radio" name="content_speakers" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Zeitplanung/Takt</td>
+                                    <td><input type="radio" name="content_timing" value="1" required></td>
+                                    <td><input type="radio" name="content_timing" value="2"></td>
+                                    <td><input type="radio" name="content_timing" value="3"></td>
+                                    <td><input type="radio" name="content_timing" value="4"></td>
+                                    <td><input type="radio" name="content_timing" value="5"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="content_highlights">Welche Programmpunkte fanden Sie besonders gut?</label>
+                        <textarea id="content_highlights" name="content_highlights" rows="3" placeholder="Ihre Meinung..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="content_improvements">Was könnte am Programm verbessert werden?</label>
+                        <textarea id="content_improvements" name="content_improvements" rows="3" placeholder="Ihre Verbesserungsvorschläge..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Organization & Logistics -->
+                <div class="section">
+                    <h2 class="section-title">3. Organisation und Logistik</h2>
+
+                    <div class="form-group">
+                        <label>Wie bewerten Sie die folgenden organisatorischen Aspekte? *</label>
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Aspekt</th>
+                                    <th>Sehr schlecht</th>
+                                    <th>Schlecht</th>
+                                    <th>Befriedigend</th>
+                                    <th>Gut</th>
+                                    <th>Sehr gut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Anmeldeprozess</td>
+                                    <td><input type="radio" name="org_registration" value="1" required></td>
+                                    <td><input type="radio" name="org_registration" value="2"></td>
+                                    <td><input type="radio" name="org_registration" value="3"></td>
+                                    <td><input type="radio" name="org_registration" value="4"></td>
+                                    <td><input type="radio" name="org_registration" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Kommunikation im Vorfeld</td>
+                                    <td><input type="radio" name="org_communication" value="1" required></td>
+                                    <td><input type="radio" name="org_communication" value="2"></td>
+                                    <td><input type="radio" name="org_communication" value="3"></td>
+                                    <td><input type="radio" name="org_communication" value="4"></td>
+                                    <td><input type="radio" name="org_communication" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Check-in vor Ort</td>
+                                    <td><input type="radio" name="org_checkin" value="1" required></td>
+                                    <td><input type="radio" name="org_checkin" value="2"></td>
+                                    <td><input type="radio" name="org_checkin" value="3"></td>
+                                    <td><input type="radio" name="org_checkin" value="4"></td>
+                                    <td><input type="radio" name="org_checkin" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Betreuung durch das Orga-Team</td>
+                                    <td><input type="radio" name="org_staff" value="1" required></td>
+                                    <td><input type="radio" name="org_staff" value="2"></td>
+                                    <td><input type="radio" name="org_staff" value="3"></td>
+                                    <td><input type="radio" name="org_staff" value="4"></td>
+                                    <td><input type="radio" name="org_staff" value="5"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Venue & Catering -->
+                <div class="section">
+                    <h2 class="section-title">4. Veranstaltungsort und Verpflegung</h2>
+
+                    <div class="form-group">
+                        <label>Wie bewerten Sie Veranstaltungsort und Verpflegung? *</label>
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Aspekt</th>
+                                    <th>Sehr schlecht</th>
+                                    <th>Schlecht</th>
+                                    <th>Befriedigend</th>
+                                    <th>Gut</th>
+                                    <th>Sehr gut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Veranstaltungsort/Location</td>
+                                    <td><input type="radio" name="venue_location" value="1" required></td>
+                                    <td><input type="radio" name="venue_location" value="2"></td>
+                                    <td><input type="radio" name="venue_location" value="3"></td>
+                                    <td><input type="radio" name="venue_location" value="4"></td>
+                                    <td><input type="radio" name="venue_location" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Räumlichkeiten/Ausstattung</td>
+                                    <td><input type="radio" name="venue_facilities" value="1" required></td>
+                                    <td><input type="radio" name="venue_facilities" value="2"></td>
+                                    <td><input type="radio" name="venue_facilities" value="3"></td>
+                                    <td><input type="radio" name="venue_facilities" value="4"></td>
+                                    <td><input type="radio" name="venue_facilities" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Catering/Verpflegung</td>
+                                    <td><input type="radio" name="venue_catering" value="1" required></td>
+                                    <td><input type="radio" name="venue_catering" value="2"></td>
+                                    <td><input type="radio" name="venue_catering" value="3"></td>
+                                    <td><input type="radio" name="venue_catering" value="4"></td>
+                                    <td><input type="radio" name="venue_catering" value="5"></td>
+                                </tr>
+                                <tr>
+                                    <td>Networking-Möglichkeiten</td>
+                                    <td><input type="radio" name="venue_networking" value="1" required></td>
+                                    <td><input type="radio" name="venue_networking" value="2"></td>
+                                    <td><input type="radio" name="venue_networking" value="3"></td>
+                                    <td><input type="radio" name="venue_networking" value="4"></td>
+                                    <td><input type="radio" name="venue_networking" value="5"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="venue_comments">Weitere Anmerkungen zu Veranstaltungsort oder Verpflegung:</label>
+                        <textarea id="venue_comments" name="venue_comments" rows="3" placeholder="Ihre Anmerkungen..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Future Topics -->
+                <div class="section">
+                    <h2 class="section-title">5. Zukünftige Veranstaltungen</h2>
+
+                    <div class="form-group">
+                        <label>Welche Themen würden Sie sich für zukünftige Veranstaltungen wünschen?</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="topic_1" name="future_topics" value="sportmedizin">
+                                <label for="topic_1">Sportmedizin und Leistungsdiagnostik</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="topic_2" name="future_topics" value="rehabilitation">
+                                <label for="topic_2">Rehabilitation und Prävention</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="topic_3" name="future_topics" value="digitalisierung">
+                                <label for="topic_3">Digitalisierung im Gesundheitswesen</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="topic_4" name="future_topics" value="networking">
+                                <label for="topic_4">Networking und Erfahrungsaustausch</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="topic_5" name="future_topics" value="workshops">
+                                <label for="topic_5">Praktische Workshops</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="topic_6" name="future_topics" value="forschung">
+                                <label for="topic_6">Aktuelle Forschungsergebnisse</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="future_suggestions">Weitere Themenvorschläge oder Ideen:</label>
+                        <textarea id="future_suggestions" name="future_suggestions" rows="3" placeholder="Ihre Vorschläge..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Würden Sie wieder an einer HaffNet-Veranstaltung teilnehmen? *</label>
+                        <div class="radio-group">
+                            <div class="radio-item">
+                                <input type="radio" id="return_yes" name="would_return" value="yes" required>
+                                <label for="return_yes">Ja, auf jeden Fall</label>
+                            </div>
+                            <div class="radio-item">
+                                <input type="radio" id="return_maybe" name="would_return" value="maybe">
+                                <label for="return_maybe">Vielleicht, je nach Thema</label>
+                            </div>
+                            <div class="radio-item">
+                                <input type="radio" id="return_no" name="would_return" value="no">
+                                <label for="return_no">Eher nicht</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Feedback -->
+                <div class="section">
+                    <h2 class="section-title">6. Abschließende Anmerkungen</h2>
+
+                    <div class="form-group">
+                        <label for="additional_comments">Haben Sie noch weitere Anmerkungen, Lob oder Kritik?</label>
+                        <textarea id="additional_comments" name="additional_comments" rows="4" placeholder="Ihr Feedback ist uns wichtig..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Optional Contact Info -->
+                <div class="section">
+                    <h2 class="section-title">7. Kontaktdaten (Optional)</h2>
+                    <div class="note">
+                        Wenn Sie möchten, dass wir auf Ihr Feedback persönlich eingehen, können Sie hier Ihre Kontaktdaten hinterlassen.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contact_name">Name:</label>
+                        <input type="text" id="contact_name" name="contact_name" placeholder="Vor- und Nachname">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contact_email">E-Mail:</label>
+                        <input type="email" id="contact_email" name="contact_email" placeholder="ihre.email@beispiel.de">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contact_organization">Organisation/Praxis:</label>
+                        <input type="text" id="contact_organization" name="contact_organization" placeholder="Ihre Organisation">
+                    </div>
+                </div>
+
+                <button type="submit" class="submit-btn">Feedback absenden</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function handleSubmit(event) {
+            event.preventDefault();
+
+            // Collect form data
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+
+            // Handle multiple checkboxes for future topics
+            const futureTopics = Array.from(document.querySelectorAll('input[name="future_topics"]:checked'))
+                .map(cb => cb.value);
+            if (futureTopics.length > 0) {
+                data.future_topics = futureTopics;
+            }
+
+            // Add timestamp
+            data.submission_time = new Date().toISOString();
+            data.unique_id = Math.random().toString(36).substr(2, 9).toUpperCase();
+
+            console.log('Survey Data:', data);
+
+            // Show success message
+            alert(`Vielen Dank für Ihr Feedback!\n\nIhre Antworten wurden erfolgreich übermittelt.\nFeedback-ID: ${data.unique_id}\n\nWir schätzen Ihre Zeit und Ihre Meinung sehr.`);
+
+            // In production, this would submit to backend
+            // window.location.href = '/danke';
+        }
+
+        // Initialize form
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('HaffNet Feedback Survey initialized');
+        });
+    </script>
+</body>
+</html>
