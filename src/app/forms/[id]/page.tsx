@@ -329,12 +329,26 @@ export default function FormPage({ params }: FormPageProps) {
         );
       }
 
-      case 'text_block':
+      case 'text_block': {
         // Static text/heading - renders HTML content with styling
-        const paddingClass = field.formatting?.padding === 'medium' ? 'p-4' : 'p-2';
-        const alignmentClass = field.formatting?.alignment === 'left' ? 'text-left' : 'text-center';
-        const styleClass = field.formatting?.style === 'info'
-          ? 'bg-blue-50 border border-blue-200 rounded-lg'
+        const paddingClass = field.formatting?.padding === 'medium' ? 'p-4' :
+                            field.formatting?.padding === 'large' ? 'p-6' : 'p-2';
+
+        const alignmentClass = field.formatting?.alignment === 'left' ? 'text-left' :
+                              field.formatting?.alignment === 'right' ? 'text-right' :
+                              field.formatting?.alignment === 'center' ? 'text-center' : 'text-left';
+
+        // Map style types to Tailwind classes
+        const styleMap: Record<string, string> = {
+          'info': 'bg-blue-50 border border-blue-200 rounded-lg',
+          'warning': 'bg-yellow-50 border border-yellow-200 rounded-lg',
+          'success': 'bg-green-50 border border-green-200 rounded-lg',
+          'error': 'bg-red-50 border border-red-200 rounded-lg',
+          'default': 'bg-gray-50 border border-gray-200 rounded-lg',
+        };
+
+        const styleClass = field.formatting?.style
+          ? styleMap[field.formatting.style] || ''
           : '';
 
         return (
@@ -343,6 +357,7 @@ export default function FormPage({ params }: FormPageProps) {
             dangerouslySetInnerHTML={{ __html: field.content || field.label }}
           />
         );
+      }
 
       default:
         return <div className="text-gray-500">Unsupported field type: {field.type}</div>;
