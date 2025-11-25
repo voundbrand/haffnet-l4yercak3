@@ -67,6 +67,11 @@ export default function FormPage({ params }: FormPageProps) {
         }
 
         allFields.forEach((field) => {
+          // Skip text_block - it's display-only, not a form input
+          if (field.type === 'text_block') {
+            return;
+          }
+
           if (field.type === 'checkbox') {
             initialData[field.id] = [];
           } else if (field.type === 'rating') {
@@ -323,6 +328,14 @@ export default function FormPage({ params }: FormPageProps) {
           </div>
         );
       }
+
+      case 'text_block':
+        // Static text/heading - no input needed
+        return (
+          <div className="text-gray-700 leading-relaxed">
+            {field.label}
+          </div>
+        );
 
       default:
         return <div className="text-gray-500">Unsupported field type: {field.type}</div>;
