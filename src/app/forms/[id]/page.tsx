@@ -53,7 +53,20 @@ export default function FormPage({ params }: FormPageProps) {
         const initialData: Record<string, unknown> = {};
         const schema = formObject.customProperties.formSchema;
 
-        schema.fields.forEach((field) => {
+        // Handle both old format (fields array) and new format (sections array)
+        const allFields: FormField[] = [];
+
+        if (schema.sections && Array.isArray(schema.sections)) {
+          // New format: sections contain fields
+          schema.sections.forEach((section: { fields: FormField[] }) => {
+            allFields.push(...section.fields);
+          });
+        } else if (schema.fields && Array.isArray(schema.fields)) {
+          // Old format: direct fields array
+          allFields.push(...schema.fields);
+        }
+
+        allFields.forEach((field) => {
           if (field.type === 'checkbox') {
             initialData[field.id] = [];
           } else if (field.type === 'rating') {
@@ -66,7 +79,7 @@ export default function FormPage({ params }: FormPageProps) {
         });
 
         setFormData(initialData);
-        console.log('[Form Page] Form loaded successfully');
+        console.log('[Form Page] Form loaded successfully with', allFields.length, 'fields');
       } catch (err) {
         setError('Fehler beim Laden des Formulars');
         console.error('[Form Page] Load error:', err);
@@ -86,7 +99,18 @@ export default function FormPage({ params }: FormPageProps) {
 
     // Validate required fields
     const schema = form.customProperties.formSchema;
-    for (const field of schema.fields) {
+
+    // Get all fields from sections or direct fields array
+    const allFields: FormField[] = [];
+    if (schema.sections && Array.isArray(schema.sections)) {
+      schema.sections.forEach((section: { fields: FormField[] }) => {
+        allFields.push(...section.fields);
+      });
+    } else if (schema.fields && Array.isArray(schema.fields)) {
+      allFields.push(...schema.fields);
+    }
+
+    for (const field of allFields) {
       if (field.required) {
         const value = formData[field.id];
 
@@ -350,28 +374,66 @@ export default function FormPage({ params }: FormPageProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Render all fields dynamically */}
-          {schema.fields.map((field) => {
-            // Check conditional logic
-            if (field.conditionalLogic) {
-              const condition = field.conditionalLogic.show;
-              const dependentValue = formData[condition.field];
+          {/* Render sections with fields (new format) */}
+          {schema.sections && Array.isArray(schema.sections) ? (
+            schema.sections.map((section: { id: string; title: string; description?: string; fields: FormField[] }) => (
+              <div key={section.id} className="space-y-6">
+                {/* Section Header */}
+                <div className="border-b border-gray-200 pb-4">
+                  <h2 className="text-2xl font-bold text-gray-900">{section.title}</h2>
+                  {section.description && (
+                    <p className="text-gray-600 mt-2">{section.description}</p>
+                  )}
+                </div>
 
-              if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
-                return null; // Hide field
-              }
-            }
+                {/* Section Fields */}
+                {section.fields.map((field) => {
+                  // Check conditional logic
+                  if (field.conditionalLogic) {
+                    const condition = field.conditionalLogic.show;
+                    const dependentValue = formData[condition.field];
 
-            return (
-              <div key={field.id} className="bg-white rounded-lg shadow-md p-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {field.label}
-                  {field.required && ' *'}
-                </label>
-                {renderField(field)}
+                    if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
+                      return null; // Hide field
+                    }
+                  }
+
+                  return (
+                    <div key={field.id} className="bg-white rounded-lg shadow-md p-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {field.label}
+                        {field.required && ' *'}
+                      </label>
+                      {renderField(field)}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            ))
+          ) : (
+            /* Fallback: Render direct fields array (old format) */
+            schema.fields && Array.isArray(schema.fields) && schema.fields.map((field) => {
+              // Check conditional logic
+              if (field.conditionalLogic) {
+                const condition = field.conditionalLogic.show;
+                const dependentValue = formData[condition.field];
+
+                if (condition.operator === 'equals' && !condition.value.includes(dependentValue as string)) {
+                  return null; // Hide field
+                }
+              }
+
+              return (
+                <div key={field.id} className="bg-white rounded-lg shadow-md p-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {field.label}
+                    {field.required && ' *'}
+                  </label>
+                  {renderField(field)}
+                </div>
+              );
+            })
+          )}
 
           {/* Error Message */}
           {error && (

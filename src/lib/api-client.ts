@@ -725,7 +725,15 @@ export interface Form {
     eventId?: string; // Optional - only for event-related forms
     formSchema: {
       version: string;
-      fields: FormField[];
+      // Old format: direct fields array
+      fields?: FormField[];
+      // New format: sections contain fields
+      sections?: Array<{
+        id: string;
+        title: string;
+        description?: string;
+        fields: FormField[];
+      }>;
       settings: {
         allowMultipleSubmissions: boolean;
         showProgressBar: boolean;
