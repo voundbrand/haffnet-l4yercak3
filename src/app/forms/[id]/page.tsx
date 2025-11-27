@@ -124,14 +124,6 @@ export default function FormPage({ params }: FormPageProps) {
   const schema = form.customProperties.formSchema;
   const displayMode = schema.settings?.displayMode || 'all';
 
-  // Debug logging
-  console.log('[FormPage] Display mode detection:', {
-    displayMode,
-    settings: schema.settings,
-    hasSettings: !!schema.settings,
-    rawDisplayMode: schema.settings?.displayMode,
-  });
-
   // Route to appropriate renderer based on display mode
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12">
